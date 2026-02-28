@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.metroid.editor.data.MetroidNames
 import com.metroid.editor.data.Room
 import com.metroid.editor.rom.MetroidRomData
 
@@ -51,10 +52,13 @@ fun RoomInfoPanel(
 
             InfoSection("Objects (${room.objects.size})") {
                 room.objects.forEachIndexed { idx, obj ->
+                    val struct = metroidData.readStructure(room.area, obj.structIndex)
+                    val macroCount = struct?.rows?.sumOf { it.macroIndices.size } ?: 0
+                    val rowCount = struct?.rows?.size ?: 0
+                    val structDesc = "Struct ${"$%02X".format(obj.structIndex)} (${rowCount}r×${macroCount}m)"
                     InfoRow(
                         "Obj $idx",
-                        "pos=(${"$%X".format(obj.posX)},${"$%X".format(obj.posY)}) " +
-                                "struct=${"$%02X".format(obj.structIndex)} pal=${obj.palette}"
+                        "(${"$%X".format(obj.posX)},${"$%X".format(obj.posY)}) $structDesc pal=${obj.palette}"
                     )
                 }
             }
@@ -63,11 +67,12 @@ fun RoomInfoPanel(
 
             InfoSection("Enemies (${room.enemies.size})") {
                 room.enemies.forEachIndexed { idx, enemy ->
-                    InfoRow(
+                    val name = MetroidNames.enemyName(enemy.type)
+                    val color = if (MetroidNames.isItem(enemy.type)) Color(0xFF88FF88) else Color(0xFFFF8888)
+                    InfoRowColored(
                         "Enemy $idx",
-                        "type=${"$%02X".format(enemy.type)} " +
-                                "pos=(${"$%X".format(enemy.posX)},${"$%X".format(enemy.posY)}) " +
-                                "slot=${"$%02X".format(enemy.slot)}"
+                        "$name (${"$%X".format(enemy.posX)},${"$%X".format(enemy.posY)})",
+                        color
                     )
                 }
             }
@@ -78,8 +83,7 @@ fun RoomInfoPanel(
                 room.doors.forEachIndexed { idx, door ->
                     InfoRow(
                         "Door $idx",
-                        "info=${"$%02X".format(door.info)} " +
-                                "side=${if (door.side == 0) "right" else "left"}"
+                        "info=${"$%02X".format(door.info)} ${if (door.side == 0) "→ right" else "← left"}"
                     )
                 }
             }
@@ -123,16 +127,18 @@ fun InfoRow(label: String, value: String) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            label,
-            fontSize = 11.sp,
-            color = Color(0xFF8080A0)
-        )
-        Text(
-            value,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 11.sp,
-            color = Color(0xFFC0C0E0)
-        )
+        Text(label, fontSize = 11.sp, color = Color(0xFF8080A0))
+        Text(value, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Color(0xFFC0C0E0))
+    }
+}
+
+@Composable
+fun InfoRowColored(label: String, value: String, valueColor: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, fontSize = 11.sp, color = Color(0xFF8080A0))
+        Text(value, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = valueColor)
     }
 }

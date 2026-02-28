@@ -22,7 +22,7 @@ import com.metroid.editor.data.*
  * From the disassembly, GetRoomNum calculates: addr = (MapY * 32) + MapX + 0x7000,
  * then reads the room number byte. 0xFF = empty/unused cell.
  */
-class MetroidRomData(private val rom: NesRomParser) {
+class MetroidRomData(val rom: NesRomParser) {
 
     companion object {
         const val AREA_POINTERS_ADDR = 0x9598

@@ -87,6 +87,25 @@ class NesRomParser(val romData: ByteArray) {
     /**
      * Validate that this looks like a Metroid NES ROM.
      */
+    /**
+     * Write a byte at an absolute ROM file offset.
+     */
+    fun writeByte(offset: Int, value: Int) {
+        romData[offset] = (value and 0xFF).toByte()
+    }
+
+    /**
+     * Write a byte at a CPU address within a specific bank.
+     */
+    fun writeBankByte(bankNumber: Int, cpuAddress: Int, value: Int) {
+        writeByte(bankAddressToRomOffset(bankNumber, cpuAddress), value)
+    }
+
+    /**
+     * Create a mutable copy of the ROM data for export.
+     */
+    fun copyRomData(): ByteArray = romData.copyOf()
+
     fun isMetroidRom(): Boolean {
         if (!header.isValid) return false
         if (header.prgBanks != 8) return false
