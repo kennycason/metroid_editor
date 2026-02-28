@@ -1,0 +1,27 @@
+# Gradle
+build/
+.gradle/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kotlin
+.kotlin/
+out/
+
+# Local
+local.properties
+*.log
+
+# ROM files (copyrighted game dumps — remove this line to track)
+roms/*.nes
+roms/*.zip
