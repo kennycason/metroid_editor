@@ -35,6 +35,43 @@ class MapRenderer(
     }
 
     /**
+     * Editable room state: a flat 16×15 macro grid + attribute (palette) grid.
+     * Built by decomposing room objects→structures→macros.
+     */
+    data class MacroGrid(
+        val macros: IntArray = IntArray(ROOM_WIDTH_MACROS * ROOM_HEIGHT_MACROS) { -1 },
+        val attrs: IntArray = IntArray(ROOM_WIDTH_MACROS * ROOM_HEIGHT_MACROS) { 0 },
+        val roomPalette: Int = 0
+    ) {
+        fun get(x: Int, y: Int): Int =
+            if (x in 0 until ROOM_WIDTH_MACROS && y in 0 until ROOM_HEIGHT_MACROS)
+                macros[y * ROOM_WIDTH_MACROS + x] else -1
+
+        fun set(x: Int, y: Int, macroIdx: Int) {
+            if (x in 0 until ROOM_WIDTH_MACROS && y in 0 until ROOM_HEIGHT_MACROS)
+                macros[y * ROOM_WIDTH_MACROS + x] = macroIdx
+        }
+
+        fun getAttr(x: Int, y: Int): Int =
+            if (x in 0 until ROOM_WIDTH_MACROS && y in 0 until ROOM_HEIGHT_MACROS)
+                attrs[y * ROOM_WIDTH_MACROS + x] else 0
+
+        fun setAttr(x: Int, y: Int, pal: Int) {
+            if (x in 0 until ROOM_WIDTH_MACROS && y in 0 until ROOM_HEIGHT_MACROS)
+                attrs[y * ROOM_WIDTH_MACROS + x] = pal
+        }
+
+        fun copy(): MacroGrid = MacroGrid(macros.copyOf(), attrs.copyOf(), roomPalette)
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is MacroGrid) return false
+            return macros.contentEquals(other.macros) && attrs.contentEquals(other.attrs)
+        }
+        override fun hashCode(): Int = macros.contentHashCode()
+    }
+
+    /**
      * Rendered room data — pixel array plus metadata.
      */
     data class RoomRenderResult(
@@ -157,6 +194,65 @@ class MapRenderer(
                 }
             }
         }
+    }
+
+    /**
+     * Decompose a room into an editable macro grid by expanding all objects.
+     */
+    fun buildMacroGrid(room: Room): MacroGrid {
+        val grid = MacroGrid(roomPalette = room.palette)
+        grid.attrs.fill(room.palette)
+
+        for (obj in room.objects) {
+            val structure = romData.readStructure(room.area, obj.structIndex) ?: continue
+            var macroRow = obj.posY
+            for (row in structure.rows) {
+                var macroCol = obj.posX + row.xOffset
+                for (macroIdx in row.macroIndices) {
+                    if (macroCol in 0 until ROOM_WIDTH_MACROS && macroRow in 0 until ROOM_HEIGHT_MACROS) {
+                        grid.set(macroCol, macroRow, macroIdx)
+                        grid.setAttr(macroCol, macroRow, obj.palette)
+                    }
+                    macroCol++
+                }
+                macroRow++
+            }
+        }
+        return grid
+    }
+
+    /**
+     * Render a room from a MacroGrid (used for editing — re-renders after painting).
+     */
+    fun renderFromGrid(room: Room, grid: MacroGrid): RoomRenderResult {
+        val pixels = IntArray(ROOM_WIDTH_PX * ROOM_HEIGHT_PX)
+        val bankNumber = MetroidRomData.AREA_BANKS[room.area] ?: return gridFallback(room)
+
+        val fullPalette = patternDecoder.readAreaPalette(bankNumber, 0)
+        val chrRam = patternDecoder.buildChrRam(room.area)
+        pixels.fill(fullPalette[0])
+
+        for (my in 0 until ROOM_HEIGHT_MACROS) {
+            for (mx in 0 until ROOM_WIDTH_MACROS) {
+                val macroIdx = grid.get(mx, my)
+                if (macroIdx < 0) continue
+
+                val macro = romData.readMacro(room.area, macroIdx) ?: continue
+                val attrIdx = grid.getAttr(mx, my) and 0x03
+                val subPalette = patternDecoder.getSubPalette(fullPalette, attrIdx)
+
+                val tiles = intArrayOf(macro.topLeft, macro.topRight, macro.botLeft, macro.botRight)
+                for (ti in 0 until 4) {
+                    val tx = mx * 2 + (ti % 2)
+                    val ty = my * 2 + (ti / 2)
+                    val tilePixels = patternDecoder.decodeBgTileFromChrRam(chrRam, tiles[ti])
+                    val rendered = patternDecoder.renderTile(tilePixels, subPalette)
+                    blitTile(pixels, ROOM_WIDTH_PX, tx * TILE_SIZE, ty * TILE_SIZE, rendered)
+                }
+            }
+        }
+
+        return RoomRenderResult(pixels, ROOM_WIDTH_PX, ROOM_HEIGHT_PX, room)
     }
 
     private fun gridFallback(room: Room): RoomRenderResult {
