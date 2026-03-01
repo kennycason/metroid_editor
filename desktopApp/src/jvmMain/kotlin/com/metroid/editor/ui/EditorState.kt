@@ -65,6 +65,9 @@ class EditorState {
     // Coverage map — true means position has ROM structure backing (exportable)
     var coverageMap by mutableStateOf<BooleanArray?>(null); private set
 
+    // Space budget for the current area
+    var spaceBudget by mutableStateOf<RoomEncoder.SpaceBudget?>(null); private set
+
     // Overlay toggles
     var showEnemies by mutableStateOf(true)
     var showDoors by mutableStateOf(true)
@@ -138,6 +141,7 @@ class EditorState {
             selectedRoom = rooms.firstOrNull()
             rebuildTilePalette()
             selectRoom(selectedRoom)
+            recalcBudget()
         }
     }
 
@@ -457,49 +461,58 @@ class EditorState {
         undoVersion++
     }
 
+    // -- Space budget --
+
+    fun recalcBudget() {
+        val parser = romParser ?: return
+        val md = metroidData ?: return
+        val renderer = mapRenderer ?: return
+        val area = selectedArea
+        try {
+            saveCurrentRoomEdits()
+            val areaRooms = md.readAllRooms(area)
+            val grids = areaRooms.map { room ->
+                val grid = renderer.buildMacroGrid(room)
+                val key = roomKey(room.area, room.roomNumber)
+                val edits = project.rooms[key]
+                if (edits != null) {
+                    for (edit in edits.macroEdits) {
+                        grid.set(edit.x, edit.y, edit.macroIndex)
+                        grid.setAttr(edit.x, edit.y, edit.palette)
+                    }
+                }
+                grid
+            }
+            spaceBudget = RoomEncoder.calculateBudget(parser, md, area, areaRooms, grids)
+        } catch (_: Exception) {
+            spaceBudget = null
+        }
+    }
+
     // -- ROM export --
 
     fun exportRom(outputFile: File) {
         val parser = romParser ?: return
         val md = metroidData ?: return
+        val renderer = mapRenderer ?: return
 
         try {
             saveCurrentRoomEdits()
             val exportData = parser.copyRomData()
             val exportParser = NesRomParser(exportData)
 
-            var totalPatched = 0
-            var totalSkipped = 0
-            var roomCount = 0
-            for ((key, roomEdits) in project.rooms) {
-                if (roomEdits.macroEdits.isEmpty()) continue
-                val parts = key.split(":")
-                val areaId = parts[0].toIntOrNull() ?: continue
-                val roomHex = parts.getOrNull(1) ?: continue
-                val roomNum = roomHex.toIntOrNull(16) ?: continue
-                val area = Area.entries.getOrNull(areaId) ?: continue
-                val room = md.readRoom(area, roomNum) ?: continue
-
-                val renderer = mapRenderer ?: continue
-                val origGrid = renderer.buildMacroGrid(room)
-                val editedGrid = origGrid.copy()
-
-                for (edit in roomEdits.macroEdits) {
-                    editedGrid.set(edit.x, edit.y, edit.macroIndex)
-                    editedGrid.setAttr(edit.x, edit.y, edit.palette)
-                }
-
-                val result = RomExporter.exportRoom(exportParser, md, room, origGrid, editedGrid)
-                totalPatched += result.patchedCount
-                totalSkipped += result.skippedCount
-                roomCount++
-            }
+            val result = RomExporter.exportAll(
+                exportParser, parser, md, renderer, project.rooms
+            )
 
             outputFile.writeBytes(exportData)
-            val skippedNote = if (totalSkipped > 0)
-                " ($totalSkipped edits on background tiles skipped — paint over existing tiles for export)"
-            else ""
-            statusMessage = "ROM exported: ${outputFile.name} ($totalPatched edits in $roomCount rooms)$skippedNote"
+
+            val details = buildString {
+                append("${result.coveredPatched} in-place")
+                if (result.uncoveredPatched > 0) append(", ${result.uncoveredPatched} new tiles")
+                if (result.errors.isNotEmpty()) append(" | ERRORS: ${result.errors.joinToString("; ")}")
+            }
+            statusMessage = "ROM exported: ${outputFile.name} (${result.totalEdits} edits: $details)"
         } catch (e: Exception) {
             statusMessage = "Error exporting ROM: ${e.message}"
             e.printStackTrace()

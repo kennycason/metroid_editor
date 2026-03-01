@@ -145,11 +145,17 @@ class MetroidRomData(val rom: NesRomParser) {
 
         // Parse room objects until $FD or $FF
         val objects = mutableListOf<RoomObject>()
+        var hasEnemyDoorSection = false
         while (true) {
             val b = rom.readBankByte(bank, pos)
             rawData.add(b.toByte())
 
-            if (b == ROOM_END_OBJECTS || b == ROOM_END_DATA) {
+            if (b == ROOM_END_OBJECTS) {
+                hasEnemyDoorSection = true
+                pos++
+                break
+            }
+            if (b == ROOM_END_DATA) {
                 pos++
                 break
             }
@@ -169,57 +175,59 @@ class MetroidRomData(val rom: NesRomParser) {
             pos += 3
         }
 
-        // Parse enemy/door data until $FF
+        // Parse enemy/door data until $FF (only if objects ended with $FD)
         val enemies = mutableListOf<RoomEnemy>()
         val doors = mutableListOf<RoomDoor>()
 
-        while (true) {
-            if (pos >= cpuAddr + 0x1000) break // safety limit
-            val b = rom.readBankByte(bank, pos)
-            rawData.add(b.toByte())
+        if (hasEnemyDoorSection) {
+            while (true) {
+                if (pos >= cpuAddr + 0x1000) break // safety limit
+                val b = rom.readBankByte(bank, pos)
+                rawData.add(b.toByte())
 
-            if (b == ROOM_END_DATA) break
+                if (b == ROOM_END_DATA) break
 
-            val entryType = b and 0x0F
-            when (entryType) {
-                1 -> {
-                    // Enemy
-                    val slot = b and 0xF0
-                    val type = rom.readBankByte(bank, pos + 1)
-                    val enemyPos = rom.readBankByte(bank, pos + 2)
-                    rawData.add(type.toByte())
-                    rawData.add(enemyPos.toByte())
-                    enemies.add(RoomEnemy(slot, type, (enemyPos shr 4) and 0x0F, enemyPos and 0x0F))
-                    pos += 3
-                }
-                2 -> {
-                    // Door
-                    val doorInfo = rom.readBankByte(bank, pos + 1)
-                    rawData.add(doorInfo.toByte())
-                    val doorSide = if ((doorInfo and 0x80) != 0) 1 else 0
-                    doors.add(RoomDoor(doorInfo, doorSide))
-                    pos += 2
-                }
-                4 -> {
-                    // Elevator
-                    val elevData = rom.readBankByte(bank, pos + 1)
-                    rawData.add(elevData.toByte())
-                    pos += 2
-                }
-                6 -> {
-                    // Statues (Kraid/Ridley)
-                    pos += 1
-                }
-                7 -> {
-                    // Zeb hole (regenerating enemies)
-                    val zebType = rom.readBankByte(bank, pos + 1)
-                    val zebPos = rom.readBankByte(bank, pos + 2)
-                    rawData.add(zebType.toByte())
-                    rawData.add(zebPos.toByte())
-                    pos += 3
-                }
-                else -> {
-                    pos += 1
+                val entryType = b and 0x0F
+                when (entryType) {
+                    1 -> {
+                        // Enemy
+                        val slot = b and 0xF0
+                        val type = rom.readBankByte(bank, pos + 1)
+                        val enemyPos = rom.readBankByte(bank, pos + 2)
+                        rawData.add(type.toByte())
+                        rawData.add(enemyPos.toByte())
+                        enemies.add(RoomEnemy(slot, type, (enemyPos shr 4) and 0x0F, enemyPos and 0x0F))
+                        pos += 3
+                    }
+                    2 -> {
+                        // Door
+                        val doorInfo = rom.readBankByte(bank, pos + 1)
+                        rawData.add(doorInfo.toByte())
+                        val doorSide = if ((doorInfo and 0x80) != 0) 1 else 0
+                        doors.add(RoomDoor(doorInfo, doorSide))
+                        pos += 2
+                    }
+                    4 -> {
+                        // Elevator
+                        val elevData = rom.readBankByte(bank, pos + 1)
+                        rawData.add(elevData.toByte())
+                        pos += 2
+                    }
+                    6 -> {
+                        // Statues (Kraid/Ridley)
+                        pos += 1
+                    }
+                    7 -> {
+                        // Zeb hole (regenerating enemies)
+                        val zebType = rom.readBankByte(bank, pos + 1)
+                        val zebPos = rom.readBankByte(bank, pos + 2)
+                        rawData.add(zebType.toByte())
+                        rawData.add(zebPos.toByte())
+                        pos += 3
+                    }
+                    else -> {
+                        pos += 1
+                    }
                 }
             }
         }

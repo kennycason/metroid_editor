@@ -25,3 +25,6 @@ local.properties
 # ROM files (copyrighted game dumps — remove this line to track)
 roms/*.nes
 roms/*.zip
+
+# Disassembly reference (large, third-party)
+context/MetroidMMC3/

@@ -233,6 +233,7 @@ fun MetroidEditorApp(
                     RoomInfoPanel(
                         room = room,
                         metroidData = md,
+                        spaceBudget = editorState.spaceBudget,
                         modifier = Modifier.width(260.dp).fillMaxHeight()
                     )
                 }

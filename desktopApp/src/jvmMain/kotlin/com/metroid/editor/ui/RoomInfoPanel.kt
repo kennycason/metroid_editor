@@ -13,11 +13,13 @@ import androidx.compose.ui.unit.sp
 import com.metroid.editor.data.MetroidNames
 import com.metroid.editor.data.Room
 import com.metroid.editor.rom.MetroidRomData
+import com.metroid.editor.rom.RoomEncoder
 
 @Composable
 fun RoomInfoPanel(
     room: Room,
     metroidData: MetroidRomData,
+    spaceBudget: RoomEncoder.SpaceBudget? = null,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -46,6 +48,50 @@ fun RoomInfoPanel(
                 InfoRow("Palette", "${room.palette}")
                 InfoRow("ROM Offset", "$%06X".format(room.romOffset))
                 InfoRow("Data Size", "${room.rawData.size} bytes")
+            }
+
+            if (spaceBudget != null) {
+                Spacer(Modifier.height(12.dp))
+
+                val pct = spaceBudget.percentUsed
+                val barColor = when {
+                    pct >= 95 -> Color(0xFFFF4444)
+                    pct >= 80 -> Color(0xFFFFAA44)
+                    else -> Color(0xFF44CC44)
+                }
+
+                InfoSection("Bank Space (${room.area.displayName})") {
+                    InfoRow("Tiles", "${spaceBudget.tilesUsed}")
+                    InfoRow("Rooms", "${spaceBudget.roomDataBytes} bytes")
+                    InfoRow("Structs", "${spaceBudget.structDataBytes} bytes")
+                    InfoRow("Ptrs", "${spaceBudget.ptrTableBytes} bytes")
+                    InfoRow("Total", "${spaceBudget.totalUsed} / ${spaceBudget.totalAvailable}")
+                    InfoRow("Bank free", "${spaceBudget.freeSpaceInBank} bytes")
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Surface(
+                        color = Color(0xFF0A0A1A),
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth().height(8.dp)
+                    ) {
+                        Box(Modifier.fillMaxSize()) {
+                            Surface(
+                                color = barColor,
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(fraction = (pct / 100f).coerceIn(0f, 1f))
+                            ) {}
+                        }
+                    }
+
+                    Text(
+                        "${pct}% used",
+                        fontSize = 10.sp,
+                        color = barColor,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
             }
 
             Spacer(Modifier.height(12.dp))
