@@ -22,9 +22,10 @@ out/
 local.properties
 *.log
 
-# ROM files (copyrighted game dumps — remove this line to track)
+# ROM files (copyrighted game dumps)
 roms/*.nes
 roms/*.zip
+shared/src/jvmTest/resources/*.nes
 
 # Disassembly reference (large, third-party)
 context/MetroidMMC3/

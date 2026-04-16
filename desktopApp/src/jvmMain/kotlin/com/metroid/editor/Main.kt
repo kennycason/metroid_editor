@@ -8,9 +8,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -28,11 +30,43 @@ fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,
         title = editorState.title,
-        state = windowState
+        state = windowState,
+        icon = painterResource("app_icon.png"),
+        onPreviewKeyEvent = { keyEvent ->
+            if (keyEvent.type == KeyEventType.KeyDown) {
+                val mod = keyEvent.isCtrlPressed || keyEvent.isMetaPressed
+                when {
+                    mod && keyEvent.isShiftPressed && keyEvent.key == Key.S -> {
+                        showSaveProjectDialog(null, editorState); true
+                    }
+                    mod && keyEvent.key == Key.S -> {
+                        if (editorState.hasProject) editorState.saveProject()
+                        else showSaveProjectDialog(null, editorState)
+                        true
+                    }
+                    mod && keyEvent.key == Key.O -> {
+                        showOpenRomDialog(null, editorState); true
+                    }
+                    mod && keyEvent.isShiftPressed && keyEvent.key == Key.Z -> {
+                        editorState.redo(); true
+                    }
+                    mod && keyEvent.key == Key.Z -> {
+                        editorState.undo(); true
+                    }
+                    mod && keyEvent.key == Key.E -> {
+                        if (editorState.isRomLoaded) showExportRomDialog(null, editorState)
+                        true
+                    }
+                    else -> false
+                }
+            } else false
+        },
     ) {
         val awtWindow = this.window
 
         LaunchedEffect(Unit) {
+            editorState.autoLoadLastSession()
+
             awtWindow.dropTarget = DropTarget().apply {
                 addDropTargetListener(object : DropTargetAdapter() {
                     override fun drop(dtde: DropTargetDropEvent) {

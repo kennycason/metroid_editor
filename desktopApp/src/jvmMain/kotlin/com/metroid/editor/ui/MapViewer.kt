@@ -38,7 +38,7 @@ fun MapViewer(
     val editVer = editorState.editVersion
     val grid = editorState.workingGrid
 
-    LaunchedEffect(room, editVer) {
+    LaunchedEffect(renderer, room, editVer) {
         try {
             val result = if (grid != null) {
                 renderer.renderFromGrid(room, grid)

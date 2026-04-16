@@ -1,6 +1,9 @@
 package com.metroid.editor.rom
 
 import com.metroid.editor.data.*
+import io.github.oshai.kotlinlogging.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 /**
  * Re-encodes room and structure data from decoded macro grids.

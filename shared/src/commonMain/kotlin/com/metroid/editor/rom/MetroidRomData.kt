@@ -1,6 +1,9 @@
 package com.metroid.editor.rom
 
 import com.metroid.editor.data.*
+import io.github.oshai.kotlinlogging.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 /**
  * Extracts Metroid-specific game data from the ROM.
@@ -129,7 +132,7 @@ class MetroidRomData(val rom: NesRomParser) {
         return try {
             parseRoomData(area, roomNumber, bank, roomAddr, romOffset)
         } catch (e: Exception) {
-            println("Failed to parse ${area.displayName} room $roomNumber: ${e.message}")
+            logger.error(e) { "Failed to parse ${area.displayName} room $roomNumber" }
             null
         }
     }

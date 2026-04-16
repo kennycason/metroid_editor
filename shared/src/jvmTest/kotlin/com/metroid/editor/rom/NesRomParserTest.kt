@@ -17,7 +17,6 @@ import java.io.File
 class NesRomParserTest {
 
     companion object {
-        // Search multiple paths for the ROM
         private val ROM_PATHS = listOf(
             "roms/Metroid (USA).nes",
             "../roms/Metroid (USA).nes",
@@ -29,10 +28,14 @@ class NesRomParserTest {
                 val f = File(path)
                 if (f.exists()) return f
             }
-            // Also try from workspace root
             val workspaceRoot = File(System.getProperty("user.dir")).parentFile
             if (workspaceRoot != null) {
                 val f = File(workspaceRoot, "roms/Metroid (USA).nes")
+                if (f.exists()) return f
+            }
+            val resource = NesRomParserTest::class.java.getResource("/Metroid (USA).nes")
+            if (resource != null) {
+                val f = File(resource.toURI())
                 if (f.exists()) return f
             }
             return null

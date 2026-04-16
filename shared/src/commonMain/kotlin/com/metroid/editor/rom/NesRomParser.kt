@@ -108,7 +108,7 @@ class NesRomParser(val romData: ByteArray) {
 
     fun isMetroidRom(): Boolean {
         if (!header.isValid) return false
-        if (header.prgBanks != 8) return false
+        if (header.prgBanks != 8 && header.prgBanks != 16) return false
         if (header.chrBanks != 0) return false
         // Mapper 1 (MMC1) for original, mapper 4 (MMC3) for TxROM hack
         if (header.mapper != 1 && header.mapper != 4) return false

@@ -1,0 +1,67 @@
+name: Build Cross-Platform
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Run tests
+        run: ./gradlew :shared:jvmTest
+        shell: bash
+
+      - name: Build application
+        run: ./gradlew :desktopApp:packageDistributionForCurrentOS
+        shell: bash
+
+      - name: Upload macOS build
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MetroidEditor-macOS-${{ github.run_number }}
+          path: desktopApp/build/compose/binaries/main/dmg/*.dmg
+          retention-days: 30
+
+      - name: Upload Windows build
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MetroidEditor-Windows-${{ github.run_number }}
+          path: desktopApp/build/compose/binaries/main/msi/*.msi
+          retention-days: 30
+
+      - name: Upload Linux build
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MetroidEditor-Linux-${{ github.run_number }}
+          path: desktopApp/build/compose/binaries/main/deb/*.deb
+          retention-days: 30

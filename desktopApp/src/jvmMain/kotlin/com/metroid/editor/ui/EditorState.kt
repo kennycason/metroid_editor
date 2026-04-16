@@ -4,9 +4,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.metroid.editor.data.*
+import com.metroid.editor.data.RomPreferences
 import com.metroid.editor.rom.*
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.Json
 import java.io.File
+
+private val logger = KotlinLogging.logger {}
 
 enum class EditorTool(val label: String, val icon: String) {
     PAINT("Paint", "P"),
@@ -97,6 +101,7 @@ class EditorState {
 
     fun loadRom(file: File): Boolean {
         try {
+            logger.info { "loadRom: ${file.absolutePath} (${file.length()} bytes)" }
             if (!file.exists() || file.length() == 0L) {
                 statusMessage = "File is empty or does not exist: ${file.name}"
                 return false
@@ -109,6 +114,17 @@ class EditorState {
                 statusMessage = "Not a valid Metroid NES ROM"
                 return false
             }
+
+            // Clear all editor state BEFORE loading new data —
+            // prevents saveCurrentRoomEdits() from leaking old edits into the new project
+            workingGrid = null
+            originalGrid = null
+            coverageMap = null
+            selectedRoom = null
+            undoStack.clear()
+            redoStack.clear()
+            undoVersion++
+
             romParser = parser
             val md = MetroidRomData(parser)
             metroidData = md
@@ -117,11 +133,14 @@ class EditorState {
             mapRenderer = MapRenderer(md, pd)
             romFile = file
             romFileName = file.name
+            projectFile = null  // Clear old project reference so title updates
+            RomPreferences.setLastRomPath(file.absolutePath)
 
             val headerNote = if (wasHeaderless) " (headerless, iNES header added)" else ""
             statusMessage = "Loaded: ${file.name}$headerNote | ${parser.header.prgBanks}×16KB PRG, Mapper ${parser.mapper}"
 
-            project = project.copy(romPath = file.absolutePath)
+            project = MetEditProject(romPath = file.absolutePath)
+            dirty = false
             switchArea(selectedArea)
             return true
         } catch (e: Exception) {
@@ -228,6 +247,7 @@ class EditorState {
             redoStack.clear()
             undoVersion++
             dirty = true
+            recalcBudget()
         }
         pendingEdits.clear()
         pendingPositions.clear()
@@ -245,6 +265,7 @@ class EditorState {
         editVersion++
         undoVersion++
         dirty = hasGridChanges()
+        recalcBudget()
     }
 
     fun redo() {
@@ -259,6 +280,7 @@ class EditorState {
         editVersion++
         undoVersion++
         dirty = true
+        recalcBudget()
     }
 
     fun sampleAt(macroX: Int, macroY: Int) {
@@ -417,6 +439,7 @@ class EditorState {
             project = updated
             projectFile = target
             dirty = false
+            RomPreferences.setLastProjectPath(target.absolutePath)
             val editCount = project.rooms.values.sumOf { it.macroEdits.size }
             statusMessage = "Saved: ${target.name} ($editCount macro edits across ${project.rooms.size} rooms)"
         } catch (e: Exception) {
@@ -428,22 +451,31 @@ class EditorState {
         try {
             val jsonStr = file.readText()
             val loaded = json.decodeFromString(MetEditProject.serializer(), jsonStr)
-            project = loaded
-            projectFile = file
-            dirty = false
+            RomPreferences.setLastProjectPath(file.absolutePath)
 
             if (loaded.romPath.isNotEmpty()) {
                 val romF = File(loaded.romPath)
                 if (romF.exists()) {
-                    loadRom(romF)
+                    loadRom(romF)  // This resets project to empty
+                    // Now restore the loaded project data (edits, settings)
+                    project = loaded
+                    projectFile = file
+                    dirty = false
                     Area.entries.getOrNull(loaded.lastArea)?.let { switchArea(it) }
                     if (loaded.lastRoom >= 0) {
                         val room = rooms.find { it.roomNumber == loaded.lastRoom }
                         if (room != null) selectRoom(room)
                     }
                 } else {
+                    project = loaded
+                    projectFile = file
+                    dirty = false
                     statusMessage = "Project loaded, but ROM not found: ${loaded.romPath}"
                 }
+            } else {
+                project = loaded
+                projectFile = file
+                dirty = false
             }
             val editCount = loaded.rooms.values.sumOf { it.macroEdits.size }
             statusMessage = "Loaded: ${file.name} ($editCount macro edits across ${loaded.rooms.size} rooms)"
@@ -459,6 +491,28 @@ class EditorState {
         undoStack.clear()
         redoStack.clear()
         undoVersion++
+    }
+
+    // -- Auto-load last session --
+
+    fun autoLoadLastSession() {
+        val lastProject = RomPreferences.getLastProjectPath()
+        if (lastProject != null) {
+            try {
+                loadProject(File(lastProject))
+                return
+            } catch (e: Exception) {
+                println("Failed to auto-load project: ${e.message}")
+            }
+        }
+        val lastRom = RomPreferences.getLastRomPath()
+        if (lastRom != null) {
+            try {
+                loadRom(File(lastRom))
+            } catch (e: Exception) {
+                println("Failed to auto-load ROM: ${e.message}")
+            }
+        }
     }
 
     // -- Space budget --
@@ -498,24 +552,49 @@ class EditorState {
 
         try {
             saveCurrentRoomEdits()
-            val exportData = parser.copyRomData()
-            val exportParser = NesRomParser(exportData)
+            logger.info { "exportRom: ${project.rooms.size} edited rooms → ${outputFile.name}" }
 
-            val result = RomExporter.exportAll(
+            // Start with the current ROM data
+            var exportData = parser.copyRomData()
+            var exportParser = NesRomParser(exportData)
+
+            // First attempt: export to current ROM format
+            var result = RomExporter.exportAll(
                 exportParser, parser, md, renderer, project.rooms
             )
 
+            // If uncovered edits failed on standard ROM, auto-expand and retry
+            if (!result.success && RomExpander.isStandardRom(exportData)) {
+                logger.info { "exportRom: standard ROM has uncovered edits, expanding to 256KB..." }
+                val expanded = RomExpander.expand(parser.romData)
+                if (expanded != null) {
+                    exportData = expanded
+                    val expandedOrigParser = NesRomParser(expanded)
+                    val expandedMd = MetroidRomData(expandedOrigParser)
+                    val expandedPd = NesPatternDecoder(expandedOrigParser)
+                    val expandedRenderer = MapRenderer(expandedMd, expandedPd)
+                    exportParser = NesRomParser(expanded.copyOf())
+                    result = RomExporter.exportAll(
+                        exportParser, expandedOrigParser, expandedMd, expandedRenderer, project.rooms
+                    )
+                    exportData = exportParser.romData
+                }
+            }
+
+            if (!result.success) {
+                logger.error { "exportRom: FAILED — ${result.warnings.joinToString("; ")}" }
+                statusMessage = "Export failed: ${result.warnings.joinToString("; ")}"
+                return
+            }
+
             outputFile.writeBytes(exportData)
 
-            val details = buildString {
-                append("${result.coveredPatched} in-place")
-                if (result.uncoveredPatched > 0) append(", ${result.uncoveredPatched} new tiles")
-                if (result.errors.isNotEmpty()) append(" | ERRORS: ${result.errors.joinToString("; ")}")
-            }
-            statusMessage = "ROM exported: ${outputFile.name} (${result.totalEdits} edits: $details)"
+            val expandNote = if (exportData.size > parser.romData.size) " (ROM expanded to ${exportData.size / 1024}KB)" else ""
+            logger.info { "exportRom: done — ${result.coveredPatched} edits applied$expandNote" }
+            statusMessage = "ROM exported: ${outputFile.name} (${result.coveredPatched} edits applied$expandNote)"
         } catch (e: Exception) {
+            logger.error(e) { "exportRom failed" }
             statusMessage = "Error exporting ROM: ${e.message}"
-            e.printStackTrace()
         }
     }
 }
