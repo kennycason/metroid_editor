@@ -29,6 +29,7 @@ fun MapViewer(
     editorState: EditorState,
     modifier: Modifier = Modifier
 ) {
+    val T = EditorTheme
     var scale by remember { mutableStateOf(2f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var renderedImage by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -148,18 +149,16 @@ fun MapViewer(
 
                 val macroScaled = MapRenderer.MACRO_SIZE * scale
 
-                // Coverage overlay — dim background (non-exportable) positions
+                // Coverage overlay
                 if (editorState.showCoverage) {
                     val coverage = editorState.coverageMap
                     if (coverage != null) {
                         for (my in 0 until MapRenderer.ROOM_HEIGHT_MACROS) {
                             for (mx in 0 until MapRenderer.ROOM_WIDTH_MACROS) {
                                 if (!coverage[my * MapRenderer.ROOM_WIDTH_MACROS + mx]) {
-                                    val cx = imgLeft + mx * macroScaled
-                                    val cy = imgTop + my * macroScaled
                                     drawRect(
-                                        color = Color(0x20FF0000),
-                                        topLeft = Offset(cx, cy),
+                                        color = T.coverageOverlay,
+                                        topLeft = Offset(imgLeft + mx * macroScaled, imgTop + my * macroScaled),
                                         size = Size(macroScaled, macroScaled)
                                     )
                                 }
@@ -172,11 +171,11 @@ fun MapViewer(
                 if (editorState.showGrid) {
                     for (mx in 0..MapRenderer.ROOM_WIDTH_MACROS) {
                         val x = imgLeft + mx * macroScaled
-                        drawLine(Color(0x18FFFFFF), Offset(x, imgTop), Offset(x, imgTop + scaledHeight))
+                        drawLine(T.gridLine, Offset(x, imgTop), Offset(x, imgTop + scaledHeight))
                     }
                     for (my in 0..MapRenderer.ROOM_HEIGHT_MACROS) {
                         val y = imgTop + my * macroScaled
-                        drawLine(Color(0x18FFFFFF), Offset(imgLeft, y), Offset(imgLeft + scaledWidth, y))
+                        drawLine(T.gridLine, Offset(imgLeft, y), Offset(imgLeft + scaledWidth, y))
                     }
                 }
 
@@ -191,32 +190,21 @@ fun MapViewer(
                         val markerOff = (macroScaled - markerSize) / 2
 
                         if (isItem) {
-                            // Items: filled diamond shape
                             val cx = ex + macroScaled / 2
                             val cy = ey + macroScaled / 2
                             val r = markerSize / 2
-                            val path = androidx.compose.ui.graphics.Path().apply {
-                                moveTo(cx, cy - r)
-                                lineTo(cx + r, cy)
-                                lineTo(cx, cy + r)
-                                lineTo(cx - r, cy)
-                                close()
+                            val path = Path().apply {
+                                moveTo(cx, cy - r); lineTo(cx + r, cy)
+                                lineTo(cx, cy + r); lineTo(cx - r, cy); close()
                             }
                             drawPath(path, color.copy(alpha = 0.35f))
                             drawPath(path, color.copy(alpha = 0.9f), style = Stroke(width = 1.5f))
                         } else {
-                            // Enemies: filled rectangle with border
-                            drawRect(
-                                color = color.copy(alpha = 0.25f),
-                                topLeft = Offset(ex + markerOff, ey + markerOff),
-                                size = Size(markerSize, markerSize)
-                            )
-                            drawRect(
-                                color = color.copy(alpha = 0.8f),
-                                topLeft = Offset(ex + markerOff, ey + markerOff),
-                                size = Size(markerSize, markerSize),
-                                style = Stroke(width = 1.5f)
-                            )
+                            drawRect(color.copy(alpha = 0.25f),
+                                Offset(ex + markerOff, ey + markerOff), Size(markerSize, markerSize))
+                            drawRect(color.copy(alpha = 0.8f),
+                                Offset(ex + markerOff, ey + markerOff), Size(markerSize, markerSize),
+                                style = Stroke(width = 1.5f))
                         }
                     }
                 }
@@ -224,21 +212,12 @@ fun MapViewer(
                 // Door overlays
                 if (editorState.showDoors && room.doors.isNotEmpty()) {
                     for (door in room.doors) {
-                        val doorColor = Color(0xFF00AAFF)
                         val doorW = macroScaled * 0.3f
                         val doorH = macroScaled * 3
-
-                        if (door.side == 0) {
-                            val dx = imgLeft + scaledWidth - doorW
-                            val dy = imgTop + scaledHeight / 2 - doorH / 2
-                            drawRect(doorColor.copy(alpha = 0.25f), Offset(dx, dy), Size(doorW, doorH))
-                            drawRect(doorColor.copy(alpha = 0.8f), Offset(dx, dy), Size(doorW, doorH), style = Stroke(1.5f))
-                        } else {
-                            val dx = imgLeft
-                            val dy = imgTop + scaledHeight / 2 - doorH / 2
-                            drawRect(doorColor.copy(alpha = 0.25f), Offset(dx, dy), Size(doorW, doorH))
-                            drawRect(doorColor.copy(alpha = 0.8f), Offset(dx, dy), Size(doorW, doorH), style = Stroke(1.5f))
-                        }
+                        val dx = if (door.side == 0) imgLeft + scaledWidth - doorW else imgLeft
+                        val dy = imgTop + scaledHeight / 2 - doorH / 2
+                        drawRect(T.doorColor.copy(alpha = 0.25f), Offset(dx, dy), Size(doorW, doorH))
+                        drawRect(T.doorColor.copy(alpha = 0.8f), Offset(dx, dy), Size(doorW, doorH), style = Stroke(1.5f))
                     }
                 }
 
@@ -247,34 +226,20 @@ fun MapViewer(
                 if (hover != null && (editorState.selectedMacroIndex >= 0 || editorState.activeTool == EditorTool.ERASE)) {
                     val hx = imgLeft + hover.first * macroScaled
                     val hy = imgTop + hover.second * macroScaled
-
                     val toolColor = when (editorState.activeTool) {
                         EditorTool.PAINT -> Color(0xAAFFFFFF)
-                        EditorTool.ERASE -> Color(0xAAFF6666)
-                        EditorTool.SAMPLE -> Color(0xAA66FF66)
+                        EditorTool.ERASE -> T.errorRed
+                        EditorTool.SAMPLE -> T.sampleGreen
                     }
-
-                    drawRect(
-                        color = toolColor.copy(alpha = 0.2f),
-                        topLeft = Offset(hx, hy),
-                        size = Size(macroScaled, macroScaled)
-                    )
-                    drawRect(
-                        color = toolColor,
-                        topLeft = Offset(hx, hy),
-                        size = Size(macroScaled, macroScaled),
-                        style = Stroke(width = 1.5f)
-                    )
+                    drawRect(toolColor.copy(alpha = 0.2f), Offset(hx, hy), Size(macroScaled, macroScaled))
+                    drawRect(toolColor, Offset(hx, hy), Size(macroScaled, macroScaled), style = Stroke(width = 1.5f))
                 }
             }
         }
 
         if (renderError != null) {
-            Text(
-                renderError!!,
-                color = Color(0xFFFF6666),
-                modifier = Modifier.align(Alignment.Center).padding(16.dp)
-            )
+            Text(renderError!!, color = T.errorRed,
+                modifier = Modifier.align(Alignment.Center).padding(16.dp))
         }
 
         // Info overlay
@@ -288,32 +253,25 @@ fun MapViewer(
                 val macroAtHover = grid2?.get(hv.first, hv.second) ?: -1
                 Text(
                     "(${hv.first}, ${hv.second})" + if (macroAtHover >= 0) " M#${"%02X".format(macroAtHover)}" else "",
-                    color = Color(0xFF808090),
-                    style = MaterialTheme.typography.bodySmall
+                    color = T.textMuted, style = MaterialTheme.typography.bodySmall
                 )
             }
             if (editorState.canUndo) {
-                Text(
-                    "${editorState.undoStack.size} edits",
-                    color = Color(0xFF8E6FFF).copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Text("${editorState.undoStack.size} edits",
+                    color = T.accent.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
             }
-            Text(
-                "${(scale * 100).toInt()}%",
-                color = Color(0xFF606080),
-                style = MaterialTheme.typography.bodySmall
-            )
+            Text("${(scale * 100).toInt()}%",
+                color = T.textMuted, style = MaterialTheme.typography.bodySmall)
         }
 
-        // Tool indicator top-left
+        // Tool indicator
         Text(
             editorState.activeTool.label.uppercase(),
             modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
             color = when (editorState.activeTool) {
-                EditorTool.PAINT -> Color(0xFF8E6FFF)
-                EditorTool.ERASE -> Color(0xFFFF6666)
-                EditorTool.SAMPLE -> Color(0xFF66FF66)
+                EditorTool.PAINT -> T.accent
+                EditorTool.ERASE -> T.errorRed
+                EditorTool.SAMPLE -> T.sampleGreen
             }.copy(alpha = 0.7f),
             style = MaterialTheme.typography.labelSmall
         )

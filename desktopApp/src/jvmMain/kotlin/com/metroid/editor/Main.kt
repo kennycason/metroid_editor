@@ -107,56 +107,47 @@ fun MetroidEditorApp(
     editorState: EditorState,
     parentWindow: java.awt.Window
 ) {
+    val T = EditorTheme
+
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = Color(0xFF8E6FFF),
-            surface = Color(0xFF1A1A2E),
-            background = Color(0xFF0F0F1A),
-            onSurface = Color(0xFFE0E0E0),
-            onBackground = Color(0xFFE0E0E0),
-            surfaceVariant = Color(0xFF252540)
+            primary = T.accent,
+            surface = T.surface,
+            background = T.background,
+            onSurface = T.textPrimary,
+            onBackground = T.textPrimary,
+            surfaceVariant = T.surfaceVariant
         )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(T.background)
         ) {
-            // Top bar with menu actions
+            // Top bar
             TopAppBar(
                 title = {
-                    Text(
-                        editorState.title,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Text(editorState.title, color = T.textPrimary)
                 },
                 actions = {
                     TextButton(onClick = { showOpenRomDialog(parentWindow, editorState) }) {
-                        Text("Open ROM", fontSize = 12.sp, color = Color(0xFFA0A0C0))
+                        Text("Open ROM", fontSize = 12.sp, color = T.actionPrimary)
                     }
 
                     if (editorState.isRomLoaded) {
-                        // Undo/Redo
-                        TextButton(
-                            onClick = { editorState.undo() },
-                            enabled = editorState.canUndo
-                        ) {
+                        TextButton(onClick = { editorState.undo() }, enabled = editorState.canUndo) {
                             Text("Undo", fontSize = 12.sp,
-                                color = if (editorState.canUndo) Color(0xFFA0A0C0) else Color(0xFF505060))
+                                color = if (editorState.canUndo) T.actionPrimary else T.actionDisabled)
                         }
-                        TextButton(
-                            onClick = { editorState.redo() },
-                            enabled = editorState.canRedo
-                        ) {
+                        TextButton(onClick = { editorState.redo() }, enabled = editorState.canRedo) {
                             Text("Redo", fontSize = 12.sp,
-                                color = if (editorState.canRedo) Color(0xFFA0A0C0) else Color(0xFF505060))
+                                color = if (editorState.canRedo) T.actionPrimary else T.actionDisabled)
                         }
 
-                        // Tool selector
                         Spacer(Modifier.width(4.dp))
-                        ToolButton(editorState, EditorTool.PAINT, "Paint", Color(0xFF8E6FFF))
-                        ToolButton(editorState, EditorTool.ERASE, "Erase", Color(0xFFFF6666))
-                        ToolButton(editorState, EditorTool.SAMPLE, "Sample", Color(0xFF66FF66))
+                        ToolButton(editorState, EditorTool.PAINT, "Paint", T.accent)
+                        ToolButton(editorState, EditorTool.ERASE, "Erase", T.errorRed)
+                        ToolButton(editorState, EditorTool.SAMPLE, "Sample", T.sampleGreen)
 
                         Spacer(Modifier.width(8.dp))
 
@@ -164,21 +155,21 @@ fun MetroidEditorApp(
                             if (editorState.hasProject) editorState.saveProject()
                             else showSaveProjectDialog(parentWindow, editorState)
                         }) {
-                            Text("Save", fontSize = 12.sp, color = Color(0xFFA0A0C0))
+                            Text("Save", fontSize = 12.sp, color = T.actionPrimary)
                         }
                         TextButton(onClick = { showSaveProjectDialog(parentWindow, editorState) }) {
-                            Text("Save As", fontSize = 12.sp, color = Color(0xFFA0A0C0))
+                            Text("Save As", fontSize = 12.sp, color = T.actionPrimary)
                         }
                         TextButton(onClick = { showOpenProjectDialog(parentWindow, editorState) }) {
-                            Text("Open Project", fontSize = 12.sp, color = Color(0xFFA0A0C0))
+                            Text("Open Project", fontSize = 12.sp, color = T.actionPrimary)
                         }
                         TextButton(onClick = { showExportRomDialog(parentWindow, editorState) }) {
-                            Text("Export ROM", fontSize = 12.sp, color = Color(0xFF80CC80))
+                            Text("Export ROM", fontSize = 12.sp, color = T.exportGreen)
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF16162B)
+                    containerColor = T.panelHeader
                 )
             )
 
@@ -186,8 +177,8 @@ fun MetroidEditorApp(
             if (editorState.isRomLoaded) {
                 ScrollableTabRow(
                     selectedTabIndex = Area.entries.indexOf(editorState.selectedArea),
-                    containerColor = Color(0xFF1E1E38),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    containerColor = T.tabBar,
+                    contentColor = T.textPrimary,
                     edgePadding = 8.dp
                 ) {
                     Area.entries.forEach { area ->
@@ -197,8 +188,8 @@ fun MetroidEditorApp(
                             text = {
                                 Text(
                                     area.displayName,
-                                    color = if (area == editorState.selectedArea) Color(0xFF8E6FFF)
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    color = if (area == editorState.selectedArea) T.tabSelected
+                                    else T.tabUnselected.copy(alpha = 0.7f)
                                 )
                             }
                         )
@@ -208,7 +199,7 @@ fun MetroidEditorApp(
 
             // Main content
             Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                // Left panel: room list (top) + tile palette (bottom)
+                // Left panel: room list + tile palette
                 if (editorState.isRomLoaded) {
                     Column(modifier = Modifier.width(220.dp).fillMaxHeight()) {
                         RoomListPanel(
@@ -217,7 +208,7 @@ fun MetroidEditorApp(
                             onRoomSelected = { editorState.selectRoom(it) },
                             modifier = Modifier.weight(0.45f).fillMaxWidth()
                         )
-                        Divider(color = Color(0xFF303050), thickness = 1.dp)
+                        Divider(color = T.divider, thickness = 1.dp)
                         TilePalettePanel(
                             editorState = editorState,
                             modifier = Modifier.weight(0.55f).fillMaxWidth()
@@ -228,7 +219,7 @@ fun MetroidEditorApp(
                 // Center: map viewer
                 Box(
                     modifier = Modifier.weight(1f).fillMaxHeight()
-                        .background(Color(0xFF0A0A14))
+                        .background(T.mapBackground)
                 ) {
                     val room = editorState.selectedRoom
                     val renderer = editorState.mapRenderer
@@ -247,13 +238,13 @@ fun MetroidEditorApp(
                         ) {
                             Text(
                                 "Open a Metroid NES ROM to begin",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                color = T.textMuted,
                                 style = MaterialTheme.typography.headlineSmall
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 "Drag .nes / .medit file here, or use Open ROM button",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                color = T.textDim,
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
@@ -275,7 +266,7 @@ fun MetroidEditorApp(
 
             // Status bar
             Surface(
-                color = Color(0xFF12122A),
+                color = T.statusBar,
                 modifier = Modifier.fillMaxWidth().height(32.dp)
             ) {
                 Row(
@@ -286,13 +277,12 @@ fun MetroidEditorApp(
                     Text(
                         editorState.statusMessage,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = T.textSecondary.copy(alpha = 0.6f)
                     )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Overlay toggles
                         if (editorState.isRomLoaded) {
                             ToggleChip("Grid", editorState.showGrid) { editorState.showGrid = it }
                             ToggleChip("BG", editorState.showCoverage) { editorState.showCoverage = it }
@@ -304,7 +294,7 @@ fun MetroidEditorApp(
                                 Text(
                                     "Macro #${"$%02X".format(macroIdx)}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF8E6FFF).copy(alpha = 0.7f)
+                                    color = T.accent.copy(alpha = 0.7f)
                                 )
                             }
                         }
@@ -317,6 +307,7 @@ fun MetroidEditorApp(
 
 @Composable
 fun ToolButton(editorState: EditorState, tool: EditorTool, label: String, activeColor: Color) {
+    val T = EditorTheme
     val isActive = editorState.activeTool == tool
     Surface(
         color = if (isActive) activeColor.copy(alpha = 0.2f) else Color.Transparent,
@@ -328,7 +319,7 @@ fun ToolButton(editorState: EditorState, tool: EditorTool, label: String, active
         Text(
             label,
             fontSize = 11.sp,
-            color = if (isActive) activeColor else Color(0xFF606080),
+            color = if (isActive) activeColor else T.textMuted,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
@@ -336,15 +327,16 @@ fun ToolButton(editorState: EditorState, tool: EditorTool, label: String, active
 
 @Composable
 fun ToggleChip(label: String, enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    val T = EditorTheme
     Surface(
-        color = if (enabled) Color(0xFF2A2A50) else Color.Transparent,
+        color = if (enabled) T.toggleActive else Color.Transparent,
         shape = MaterialTheme.shapes.extraSmall,
         modifier = Modifier.clickable { onToggle(!enabled) }
     ) {
         Text(
             label,
             fontSize = 10.sp,
-            color = if (enabled) Color(0xFFA0A0C0) else Color(0xFF404060),
+            color = if (enabled) T.textSecondary else T.textDim,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }

@@ -21,6 +21,7 @@ fun TilePalettePanel(
     editorState: EditorState,
     modifier: Modifier = Modifier
 ) {
+    val T = EditorTheme
     val pixels = editorState.tilePaletteImage
     val width = editorState.tilePaletteWidth
     val height = editorState.tilePaletteHeight
@@ -31,36 +32,27 @@ fun TilePalettePanel(
     var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
 
     LaunchedEffect(pixels, width, height) {
-        if (pixels != null && width > 0 && height > 0) {
-            imageBitmap = pixelsToImageBitmap(pixels, width, height)
-        } else {
-            imageBitmap = null
-        }
+        imageBitmap = if (pixels != null && width > 0 && height > 0) {
+            pixelsToImageBitmap(pixels, width, height)
+        } else null
     }
 
-    Surface(
-        color = Color(0xFF14142A),
-        modifier = modifier
-    ) {
+    Surface(color = T.paletteBg, modifier = modifier) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Header row: palette selector + zoom
-            Surface(
-                color = Color(0xFF1E1E3A),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            // Header row
+            Surface(color = T.paletteHeader, modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Sub-palette selector
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Pal", fontSize = 10.sp, color = Color(0xFF8080A0))
+                        Text("Pal", fontSize = 10.sp, color = T.textSecondary)
                         Spacer(Modifier.width(4.dp))
                         for (palIdx in 0..3) {
                             val isSelected = editorState.selectedSubPalette == palIdx
                             Surface(
-                                color = if (isSelected) Color(0xFF8E6FFF) else Color(0xFF2A2A50),
+                                color = if (isSelected) T.paletteButtonActive else T.paletteButtonInactive,
                                 shape = MaterialTheme.shapes.extraSmall,
                                 modifier = Modifier
                                     .size(22.dp)
@@ -74,33 +66,28 @@ fun TilePalettePanel(
                                     Text(
                                         "$palIdx",
                                         fontSize = 10.sp,
-                                        color = if (isSelected) Color.White else Color(0xFF8080A0)
+                                        color = if (isSelected) Color.White else T.textSecondary
                                     )
                                 }
                             }
                         }
                     }
 
-                    // Zoom controls
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(
                             onClick = { scale = (scale - 0.5f).coerceAtLeast(1f) },
                             contentPadding = PaddingValues(0.dp),
                             modifier = Modifier.size(20.dp)
                         ) {
-                            Text("-", fontSize = 12.sp, color = Color(0xFF8080A0))
+                            Text("-", fontSize = 12.sp, color = T.textSecondary)
                         }
-                        Text(
-                            "${scale.toInt()}x",
-                            fontSize = 9.sp,
-                            color = Color(0xFF606080)
-                        )
+                        Text("${scale.toInt()}x", fontSize = 9.sp, color = T.textMuted)
                         TextButton(
                             onClick = { scale = (scale + 0.5f).coerceAtMost(6f) },
                             contentPadding = PaddingValues(0.dp),
                             modifier = Modifier.size(20.dp)
                         ) {
-                            Text("+", fontSize = 12.sp, color = Color(0xFF8080A0))
+                            Text("+", fontSize = 12.sp, color = T.textSecondary)
                         }
                     }
                 }
@@ -109,11 +96,7 @@ fun TilePalettePanel(
             // Tile grid
             val image = imageBitmap
             if (image != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                ) {
+                Box(modifier = Modifier.fillMaxSize().verticalScroll(scrollState)) {
                     val scaledW = (width * scale).toInt()
                     val scaledH = (height * scale).toInt()
 
@@ -135,8 +118,7 @@ fun TilePalettePanel(
                                     if (py >= macroStartY) {
                                         val macroCol = px / macroSize
                                         val macroRow = (py - macroStartY) / macroSize
-                                        val macroIdx = macroRow * macrosPerRow + macroCol
-                                        editorState.selectedMacroIndex = macroIdx
+                                        editorState.selectedMacroIndex = macroRow * macrosPerRow + macroCol
                                     } else {
                                         editorState.selectedMacroIndex = -1
                                     }
@@ -156,9 +138,7 @@ fun TilePalettePanel(
                         if (selectedMacro >= 0) {
                             val macroSize = 16
                             val macrosPerRow = 8
-                            val tileGridH = 16 * 8
-                            val separatorH = 2
-                            val macroStartY = tileGridH + separatorH
+                            val macroStartY = 16 * 8 + 2
 
                             val col = selectedMacro % macrosPerRow
                             val row = selectedMacro / macrosPerRow
@@ -182,15 +162,8 @@ fun TilePalettePanel(
                     }
                 }
             } else {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "Load a ROM to see tiles",
-                        fontSize = 11.sp,
-                        color = Color(0xFF404060)
-                    )
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Load a ROM to see tiles", fontSize = 11.sp, color = T.textDim)
                 }
             }
         }

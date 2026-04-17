@@ -22,23 +22,14 @@ fun RoomInfoPanel(
     spaceBudget: RoomEncoder.SpaceBudget? = null,
     modifier: Modifier = Modifier
 ) {
+    val T = EditorTheme
     val scrollState = rememberScrollState()
 
-    Surface(
-        color = Color(0xFF161630),
-        modifier = modifier
-    ) {
+    Surface(color = T.panelBg, modifier = modifier) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(12.dp)
+            modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(12.dp)
         ) {
-            Text(
-                room.displayName,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color(0xFFD0D0FF)
-            )
+            Text(room.displayName, style = MaterialTheme.typography.titleSmall, color = T.textPrimary)
 
             Spacer(Modifier.height(12.dp))
 
@@ -55,9 +46,9 @@ fun RoomInfoPanel(
 
                 val pct = spaceBudget.percentUsed
                 val barColor = when {
-                    pct >= 95 -> Color(0xFFFF4444)
-                    pct >= 80 -> Color(0xFFFFAA44)
-                    else -> Color(0xFF44CC44)
+                    pct >= 95 -> T.errorRed
+                    pct >= 80 -> T.warningOrange
+                    else -> T.successGreen
                 }
 
                 InfoSection("Bank Space (${room.area.displayName})") {
@@ -71,7 +62,7 @@ fun RoomInfoPanel(
                     Spacer(Modifier.height(4.dp))
 
                     Surface(
-                        color = Color(0xFF0A0A1A),
+                        color = T.surfaceDim,
                         shape = MaterialTheme.shapes.small,
                         modifier = Modifier.fillMaxWidth().height(8.dp)
                     ) {
@@ -101,7 +92,7 @@ fun RoomInfoPanel(
                     val struct = metroidData.readStructure(room.area, obj.structIndex)
                     val macroCount = struct?.rows?.sumOf { it.macroIndices.size } ?: 0
                     val rowCount = struct?.rows?.size ?: 0
-                    val structDesc = "Struct ${"$%02X".format(obj.structIndex)} (${rowCount}r×${macroCount}m)"
+                    val structDesc = "Struct ${"$%02X".format(obj.structIndex)} (${rowCount}r\u00D7${macroCount}m)"
                     InfoRow(
                         "Obj $idx",
                         "(${"$%X".format(obj.posX)},${"$%X".format(obj.posY)}) $structDesc pal=${obj.palette}"
@@ -114,7 +105,7 @@ fun RoomInfoPanel(
             InfoSection("Enemies (${room.enemies.size})") {
                 room.enemies.forEachIndexed { idx, enemy ->
                     val name = MetroidNames.enemyName(enemy.type)
-                    val color = if (MetroidNames.isItem(enemy.type)) Color(0xFF88FF88) else Color(0xFFFF8888)
+                    val color = if (MetroidNames.isItem(enemy.type)) T.sampleGreen else T.errorRed
                     InfoRowColored(
                         "Enemy $idx",
                         "$name (${"$%X".format(enemy.posX)},${"$%X".format(enemy.posY)})",
@@ -129,7 +120,7 @@ fun RoomInfoPanel(
                 room.doors.forEachIndexed { idx, door ->
                     InfoRow(
                         "Door $idx",
-                        "info=${"$%02X".format(door.info)} ${if (door.side == 0) "→ right" else "← left"}"
+                        "info=${"$%02X".format(door.info)} ${if (door.side == 0) "\u2192 right" else "\u2190 left"}"
                     )
                 }
             }
@@ -142,7 +133,7 @@ fun RoomInfoPanel(
                     hex + if (room.rawData.size > 64) " ..." else "",
                     fontFamily = FontFamily.Monospace,
                     fontSize = 10.sp,
-                    color = Color(0xFF606080),
+                    color = T.textMuted,
                     lineHeight = 14.sp
                 )
             }
@@ -152,14 +143,15 @@ fun RoomInfoPanel(
 
 @Composable
 fun InfoSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    val T = EditorTheme
     Text(
         title,
         style = MaterialTheme.typography.labelMedium,
-        color = Color(0xFF8E6FFF),
+        color = T.accent,
         modifier = Modifier.padding(bottom = 4.dp)
     )
     Surface(
-        color = Color(0xFF1A1A38),
+        color = T.panelSection,
         shape = MaterialTheme.shapes.small,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -169,22 +161,24 @@ fun InfoSection(title: String, content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 fun InfoRow(label: String, value: String) {
+    val T = EditorTheme
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, fontSize = 11.sp, color = Color(0xFF8080A0))
-        Text(value, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Color(0xFFC0C0E0))
+        Text(label, fontSize = 11.sp, color = T.textSecondary)
+        Text(value, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = T.textPrimary)
     }
 }
 
 @Composable
 fun InfoRowColored(label: String, value: String, valueColor: Color) {
+    val T = EditorTheme
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, fontSize = 11.sp, color = Color(0xFF8080A0))
+        Text(label, fontSize = 11.sp, color = T.textSecondary)
         Text(value, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = valueColor)
     }
 }
