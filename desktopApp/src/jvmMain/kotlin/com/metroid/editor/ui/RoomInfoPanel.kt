@@ -2,6 +2,8 @@ package com.metroid.editor.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -43,34 +45,36 @@ fun RoomInfoPanel(
                 InfoRow("Data Size", "${room.rawData.size} bytes")
 
                 val neighbors = metroidData.findRoomNeighbors(room.area, room.roomNumber)
-                if (neighbors != null) {
+                if (neighbors != null && !neighbors.isEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    InfoRow("Map Pos", "(${neighbors.mapX}, ${neighbors.mapY})")
 
                     val navCallback = onNavigateToRoom
-                    if (navCallback != null) {
-                        val links = listOfNotNull(
-                            neighbors.left?.let { "\u2190" to it },
-                            neighbors.right?.let { "\u2192" to it },
-                            neighbors.up?.let { "\u2191" to it },
-                            neighbors.down?.let { "\u2193" to it }
-                        )
-                        if (links.isNotEmpty()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Neighbors", fontSize = 11.sp, color = T.textSecondary)
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    for ((arrow, roomNum) in links) {
-                                        Text(
-                                            "$arrow \$${"%02X".format(roomNum)}",
-                                            fontSize = 11.sp,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = T.accent,
-                                            modifier = Modifier.clickable { navCallback(roomNum) }
-                                        )
-                                    }
+                    // Collect all unique connected rooms (deduplicated, sorted)
+                    val allConnected = (neighbors.left + neighbors.right +
+                            neighbors.up + neighbors.down).toSortedSet()
+
+                    if (navCallback != null && allConnected.isNotEmpty()) {
+                        Text("Connected Rooms", fontSize = 11.sp, color = T.textSecondary,
+                            modifier = Modifier.padding(vertical = 2.dp))
+                        // Wrap in a flow layout — each room as a clickable chip
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            for (roomNum in allConnected) {
+                                Surface(
+                                    color = T.accent.copy(alpha = 0.15f),
+                                    shape = MaterialTheme.shapes.extraSmall,
+                                    modifier = Modifier.clickable { navCallback(roomNum) }
+                                ) {
+                                    Text(
+                                        "\$${"%02X".format(roomNum)}",
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = T.accent,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
                                 }
                             }
                         }
@@ -162,8 +166,8 @@ fun RoomInfoPanel(
 
             InfoSection("Enemies (${room.enemies.size})") {
                 room.enemies.forEachIndexed { idx, enemy ->
-                    val name = MetroidNames.enemyName(enemy.type)
-                    val color = if (MetroidNames.isItem(enemy.type)) T.sampleGreen else T.errorRed
+                    val name = MetroidNames.enemyName(enemy.type, room.area)
+                    val color = Color(MetroidNames.enemyColor(enemy.type, room.area))
                     InfoRowColored(
                         "Enemy $idx",
                         "$name (${"$%X".format(enemy.posX)},${"$%X".format(enemy.posY)})",

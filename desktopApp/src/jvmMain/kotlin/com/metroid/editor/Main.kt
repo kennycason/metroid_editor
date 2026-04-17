@@ -3,6 +3,7 @@ package com.metroid.editor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -56,6 +57,26 @@ fun main() = application {
                     mod && keyEvent.key == Key.E -> {
                         if (editorState.isRomLoaded) showExportRomDialog(null, editorState)
                         true
+                    }
+                    // Tool shortcuts (no modifier)
+                    !mod && keyEvent.key == Key.P -> {
+                        editorState.activeTool = EditorTool.PAINT; true
+                    }
+                    !mod && keyEvent.key == Key.E -> {
+                        editorState.activeTool = EditorTool.ERASE; true
+                    }
+                    !mod && keyEvent.key == Key.I -> {
+                        editorState.activeTool = EditorTool.SAMPLE; true
+                    }
+                    // Zoom shortcuts
+                    keyEvent.key == Key.Equals || keyEvent.key == Key.NumPadAdd -> {
+                        editorState.zoomIn(); true
+                    }
+                    keyEvent.key == Key.Minus || keyEvent.key == Key.NumPadSubtract -> {
+                        editorState.zoomOut(); true
+                    }
+                    keyEvent.key == Key.Zero -> {
+                        editorState.zoomFit(); true
                     }
                     else -> false
                 }
@@ -145,9 +166,9 @@ fun MetroidEditorApp(
                         }
 
                         Spacer(Modifier.width(4.dp))
-                        ToolButton(editorState, EditorTool.PAINT, "Paint", T.accent)
-                        ToolButton(editorState, EditorTool.ERASE, "Erase", T.errorRed)
-                        ToolButton(editorState, EditorTool.SAMPLE, "Sample", T.sampleGreen)
+                        ToolButton(editorState, EditorTool.PAINT, "\u270E", "P", T.accent)
+                        ToolButton(editorState, EditorTool.ERASE, "\u2716", "E", T.errorRed)
+                        ToolButton(editorState, EditorTool.SAMPLE, "\u25C9", "I", T.sampleGreen)
 
                         Spacer(Modifier.width(8.dp))
 
@@ -216,10 +237,11 @@ fun MetroidEditorApp(
                     }
                 }
 
-                // Center: map viewer
+                // Center: map viewer (clipToBounds prevents rendering over toolbar)
                 Box(
                     modifier = Modifier.weight(1f).fillMaxHeight()
                         .background(T.mapBackground)
+                        .clipToBounds()
                 ) {
                     val room = editorState.selectedRoom
                     val renderer = editorState.mapRenderer
@@ -307,7 +329,7 @@ fun MetroidEditorApp(
 }
 
 @Composable
-fun ToolButton(editorState: EditorState, tool: EditorTool, label: String, activeColor: Color) {
+fun ToolButton(editorState: EditorState, tool: EditorTool, icon: String, shortcut: String, activeColor: Color) {
     val T = EditorTheme
     val isActive = editorState.activeTool == tool
     Surface(
@@ -318,8 +340,8 @@ fun ToolButton(editorState: EditorState, tool: EditorTool, label: String, active
             .clickable { editorState.activeTool = tool }
     ) {
         Text(
-            label,
-            fontSize = 11.sp,
+            icon,
+            fontSize = 16.sp,
             color = if (isActive) activeColor else T.textMuted,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )

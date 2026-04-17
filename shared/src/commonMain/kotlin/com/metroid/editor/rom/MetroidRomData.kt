@@ -206,7 +206,9 @@ class MetroidRomData(val rom: NesRomParser) {
                         // Door
                         val doorInfo = rom.readBankByte(bank, pos + 1)
                         rawData.add(doorInfo.toByte())
-                        val doorSide = if ((doorInfo and 0x80) != 0) 1 else 0
+                        // Amul16 shifts door info left 4 times; carry = original bit 4
+                        // CF=0 → right door, CF=1 → left door
+                        val doorSide = if ((doorInfo and 0x10) != 0) 1 else 0
                         doors.add(RoomDoor(doorInfo, doorSide))
                         pos += 2
                     }
@@ -362,9 +364,9 @@ class MetroidRomData(val rom: NesRomParser) {
 
     data class RoomNeighbors(
         val mapX: Int, val mapY: Int,
-        val left: Int?, val right: Int?, val up: Int?, val down: Int?
+        val left: Set<Int>, val right: Set<Int>, val up: Set<Int>, val down: Set<Int>
     ) {
-        fun isEmpty() = left == null && right == null && up == null && down == null
+        fun isEmpty() = left.isEmpty() && right.isEmpty() && up.isEmpty() && down.isEmpty()
     }
 
     fun findRoomNeighbors(area: Area, roomNumber: Int): RoomNeighbors? {
@@ -374,27 +376,40 @@ class MetroidRomData(val rom: NesRomParser) {
                 cells[y * WORLD_MAP_WIDTH + x].roomNumber
             }
         }
+        val areaRoomCount = getRoomCount(area)
 
-        // Find this room's position in the map — rooms can appear multiple times,
-        // use the first occurrence
+        // Read the area's starting map position from $95D7/$95D8
+        val bank = AREA_BANKS[area] ?: return null
+        val startX = rom.readByte(rom.bankAddressToRomOffset(bank, 0x95D7)) and 0xFF
+        val startY = rom.readByte(rom.bankAddressToRomOffset(bank, 0x95D8)) and 0xFF
+
+        fun validAt(x: Int, y: Int): Int? {
+            if (x !in 0 until WORLD_MAP_WIDTH || y !in 0 until WORLD_MAP_HEIGHT) return null
+            val v = grid[y][x]
+            return if (v == 0xFF || v == roomNumber || v >= areaRoomCount) null else v
+        }
+
+        // Find the occurrence closest to the area's start position.
+        // This ensures we pick the position in the area's actual map region,
+        // not a reuse of the same room number in a distant corridor.
+        var bestX = -1; var bestY = -1; var bestDist = Int.MAX_VALUE
         for (y in 0 until WORLD_MAP_HEIGHT) {
             for (x in 0 until WORLD_MAP_WIDTH) {
-                if (grid[y][x] == roomNumber) {
-                    fun cellAt(cx: Int, cy: Int): Int? {
-                        if (cx !in 0 until WORLD_MAP_WIDTH || cy !in 0 until WORLD_MAP_HEIGHT) return null
-                        val v = grid[cy][cx]
-                        return if (v == 0xFF || v == roomNumber) null else v
-                    }
-                    return RoomNeighbors(
-                        mapX = x, mapY = y,
-                        left = cellAt(x - 1, y),
-                        right = cellAt(x + 1, y),
-                        up = cellAt(x, y - 1),
-                        down = cellAt(x, y + 1)
-                    )
+                if (grid[y][x] != roomNumber) continue
+                val dist = kotlin.math.abs(x - startX) + kotlin.math.abs(y - startY)
+                if (dist < bestDist) {
+                    bestDist = dist; bestX = x; bestY = y
                 }
             }
         }
-        return null
+        if (bestX < 0) return null
+
+        return RoomNeighbors(
+            mapX = bestX, mapY = bestY,
+            left = setOfNotNull(validAt(bestX - 1, bestY)),
+            right = setOfNotNull(validAt(bestX + 1, bestY)),
+            up = setOfNotNull(validAt(bestX, bestY - 1)),
+            down = setOfNotNull(validAt(bestX, bestY + 1))
+        )
     }
 }

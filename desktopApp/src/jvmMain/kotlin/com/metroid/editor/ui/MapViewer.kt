@@ -45,11 +45,23 @@ fun MapViewer(
 
     val editVer = editorState.editVersion
     val grid = editorState.workingGrid
+    val zoomVer = editorState.zoomVersion
 
     // Reset to auto-fit when room changes
     LaunchedEffect(room) {
         scale = -1f
         offset = Offset.Zero
+    }
+
+    // Respond to keyboard zoom requests
+    LaunchedEffect(zoomVer) {
+        val req = editorState.requestedZoom
+        if (req <= 0f) {
+            scale = -1f
+            offset = Offset.Zero
+        } else {
+            scale = req.coerceIn(0.5f, 8f)
+        }
     }
 
     LaunchedEffect(renderer, room, editVer) {
@@ -215,8 +227,8 @@ fun MapViewer(
                     for (enemy in room.enemies) {
                         val ex = imgLeft + enemy.posX * macroScaled
                         val ey = imgTop + enemy.posY * macroScaled
-                        val color = Color(MetroidNames.enemyColor(enemy.type))
-                        val isItem = MetroidNames.isItem(enemy.type)
+                        val color = Color(MetroidNames.enemyColor(enemy.type, room.area))
+                        val isItem = false // items come from specItemsTable, not room enemy entries
                         val markerSize = macroScaled * 0.7f
                         val markerOff = (macroScaled - markerSize) / 2
 
@@ -239,7 +251,7 @@ fun MapViewer(
                         }
 
                         // Name label
-                        val name = MetroidNames.enemyName(enemy.type)
+                        val name = MetroidNames.enemyName(enemy.type, room.area)
                         drawIntoCanvas { canvas ->
                             val argb = color.toArgb()
                             val bgPaint = SkiaPaint().apply {
@@ -267,7 +279,7 @@ fun MapViewer(
                     for (door in room.doors) {
                         val doorW = macroScaled * 0.4f
                         val doorH = macroScaled * 3
-                        val doorY = 6  // doors are always at macro row 6
+                        val doorY = 5  // doors span macro rows 5-7
                         val dx = if (door.side == 0) imgLeft + scaledWidth - doorW else imgLeft
                         val dy = imgTop + doorY * macroScaled
                         drawRect(T.doorColor.copy(alpha = 0.25f), Offset(dx, dy), Size(doorW, doorH))

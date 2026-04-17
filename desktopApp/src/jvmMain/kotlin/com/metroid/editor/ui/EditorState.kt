@@ -78,6 +78,14 @@ class EditorState {
     var showGrid by mutableStateOf(true)
     var showCoverage by mutableStateOf(true)
 
+    // Zoom — MapViewer observes these
+    var zoomVersion by mutableStateOf(0); private set
+    var requestedZoom by mutableStateOf(0f); private set  // 0 = auto-fit, >0 = specific scale
+
+    fun zoomIn() { requestedZoom = (if (requestedZoom <= 0) 2f else requestedZoom) * 1.25f; zoomVersion++ }
+    fun zoomOut() { requestedZoom = (if (requestedZoom <= 0) 2f else requestedZoom) / 1.25f; zoomVersion++ }
+    fun zoomFit() { requestedZoom = 0f; zoomVersion++ }
+
     private val json = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
@@ -155,11 +163,14 @@ class EditorState {
     fun switchArea(area: Area) {
         saveCurrentRoomEdits()
         selectedArea = area
+        // Clear grids BEFORE selecting new room to prevent stale data leaking
+        originalGrid = null
+        workingGrid = null
+        selectedRoom = null
         metroidData?.let { md ->
             rooms = md.readAllRooms(area)
-            selectedRoom = rooms.firstOrNull()
             rebuildTilePalette()
-            selectRoom(selectedRoom)
+            selectRoom(rooms.firstOrNull())
             recalcBudget()
         }
     }
