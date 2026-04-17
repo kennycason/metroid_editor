@@ -4,6 +4,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,13 +14,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.metroid.editor.data.MetroidNames
 import com.metroid.editor.data.Room
 import com.metroid.editor.rom.MapRenderer
 import java.awt.image.BufferedImage
+import org.jetbrains.skia.Font as SkiaFont
+import org.jetbrains.skia.Paint as SkiaPaint
+import org.jetbrains.skia.Typeface as SkiaTypeface
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -30,14 +36,21 @@ fun MapViewer(
     modifier: Modifier = Modifier
 ) {
     val T = EditorTheme
-    var scale by remember { mutableStateOf(2f) }
+    var scale by remember { mutableStateOf(-1f) }  // -1 = auto-fit on first layout
     var offset by remember { mutableStateOf(Offset.Zero) }
     var renderedImage by remember { mutableStateOf<ImageBitmap?>(null) }
     var renderError by remember { mutableStateOf<String?>(null) }
     var hoverMacro by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
 
     val editVer = editorState.editVersion
     val grid = editorState.workingGrid
+
+    // Reset to auto-fit when room changes
+    LaunchedEffect(room) {
+        scale = -1f
+        offset = Offset.Zero
+    }
 
     LaunchedEffect(renderer, room, editVer) {
         try {
@@ -54,14 +67,17 @@ fun MapViewer(
         }
     }
 
+    // All coordinate math uses physical pixels (canvas space).
+    // `scale` is logical (density-independent). `pxScale` = physical scale.
     fun screenToMacro(screenPos: Offset, canvasSize: androidx.compose.ui.geometry.Size): Pair<Int, Int>? {
-        val imgW = MapRenderer.ROOM_WIDTH_PX * scale
-        val imgH = MapRenderer.ROOM_HEIGHT_PX * scale
+        val pxScale = scale * density
+        val imgW = MapRenderer.ROOM_WIDTH_PX * pxScale
+        val imgH = MapRenderer.ROOM_HEIGHT_PX * pxScale
         val imgX = canvasSize.width / 2 + offset.x - imgW / 2
         val imgY = canvasSize.height / 2 + offset.y - imgH / 2
 
-        val px = ((screenPos.x - imgX) / scale).toInt()
-        val py = ((screenPos.y - imgY) / scale).toInt()
+        val px = ((screenPos.x - imgX) / pxScale).toInt()
+        val py = ((screenPos.y - imgY) / pxScale).toInt()
 
         val macroX = px / MapRenderer.MACRO_SIZE
         val macroY = py / MapRenderer.MACRO_SIZE
@@ -133,10 +149,23 @@ fun MapViewer(
                     }
             ) {
                 canvasSize = size
+
+                // Auto-fit: compute LOGICAL scale (density-independent)
+                if (scale < 0f && size.width > 0 && size.height > 0) {
+                    val logicalW = size.width / density
+                    val logicalH = size.height / density
+                    val fitW = logicalW / MapRenderer.ROOM_WIDTH_PX * 0.9f
+                    val fitH = logicalH / MapRenderer.ROOM_HEIGHT_PX * 0.9f
+                    scale = minOf(fitW, fitH).coerceIn(0.5f, 8f)
+                    offset = Offset.Zero
+                }
+
+                // pxScale = physical pixel scale for all drawing
+                val pxScale = scale * density
                 val centerX = size.width / 2 + offset.x
                 val centerY = size.height / 2 + offset.y
-                val scaledWidth = image.width * scale
-                val scaledHeight = image.height * scale
+                val scaledWidth = image.width * pxScale
+                val scaledHeight = image.height * pxScale
                 val imgLeft = centerX - scaledWidth / 2
                 val imgTop = centerY - scaledHeight / 2
 
@@ -147,7 +176,7 @@ fun MapViewer(
                     filterQuality = FilterQuality.None
                 )
 
-                val macroScaled = MapRenderer.MACRO_SIZE * scale
+                val macroScaled = MapRenderer.MACRO_SIZE * pxScale
 
                 // Coverage overlay
                 if (editorState.showCoverage) {
@@ -181,6 +210,8 @@ fun MapViewer(
 
                 // Enemy overlays
                 if (editorState.showEnemies && room.enemies.isNotEmpty()) {
+                    val labelFont = SkiaFont(SkiaTypeface.makeDefault(), (9f * pxScale).coerceIn(8f, 24f))
+
                     for (enemy in room.enemies) {
                         val ex = imgLeft + enemy.posX * macroScaled
                         val ey = imgTop + enemy.posY * macroScaled
@@ -206,18 +237,54 @@ fun MapViewer(
                                 Offset(ex + markerOff, ey + markerOff), Size(markerSize, markerSize),
                                 style = Stroke(width = 1.5f))
                         }
+
+                        // Name label
+                        val name = MetroidNames.enemyName(enemy.type)
+                        drawIntoCanvas { canvas ->
+                            val argb = color.toArgb()
+                            val bgPaint = SkiaPaint().apply {
+                                this.color = org.jetbrains.skia.Color.makeARGB(180, 0, 0, 0)
+                            }
+                            val textPaint = SkiaPaint().apply {
+                                this.color = argb
+                                isAntiAlias = true
+                            }
+                            val textWidth = labelFont.measureTextWidth(name)
+                            val textX = ex + macroScaled / 2 - textWidth / 2
+                            val textY = ey - 3f * pxScale.coerceAtLeast(1f)
+                            val pad = 2f
+                            canvas.nativeCanvas.drawRect(
+                                org.jetbrains.skia.Rect.makeXYWH(textX - pad, textY - labelFont.size + 1, textWidth + pad * 2, labelFont.size + 2),
+                                bgPaint
+                            )
+                            canvas.nativeCanvas.drawString(name, textX, textY, labelFont, textPaint)
+                        }
                     }
                 }
 
-                // Door overlays
+                // Door overlays — NES Metroid doors span rows 6-8 (3 macros tall)
                 if (editorState.showDoors && room.doors.isNotEmpty()) {
                     for (door in room.doors) {
-                        val doorW = macroScaled * 0.3f
+                        val doorW = macroScaled * 0.4f
                         val doorH = macroScaled * 3
+                        val doorY = 6  // doors are always at macro row 6
                         val dx = if (door.side == 0) imgLeft + scaledWidth - doorW else imgLeft
-                        val dy = imgTop + scaledHeight / 2 - doorH / 2
+                        val dy = imgTop + doorY * macroScaled
                         drawRect(T.doorColor.copy(alpha = 0.25f), Offset(dx, dy), Size(doorW, doorH))
                         drawRect(T.doorColor.copy(alpha = 0.8f), Offset(dx, dy), Size(doorW, doorH), style = Stroke(1.5f))
+
+                        // Door label
+                        val sideLabel = if (door.side == 0) "R" else "L"
+                        drawIntoCanvas { canvas ->
+                            val paint = SkiaPaint().apply {
+                                color = T.doorColor.toArgb()
+                                isAntiAlias = true
+                            }
+                            val font = SkiaFont(SkiaTypeface.makeDefault(), (8f * pxScale).coerceIn(7f, 20f))
+                            val labelX = dx + doorW / 2 - font.measureTextWidth(sideLabel) / 2
+                            val labelY = dy + doorH + font.size + 2
+                            canvas.nativeCanvas.drawString(sideLabel, labelX, labelY, font, paint)
+                        }
                     }
                 }
 
@@ -242,10 +309,11 @@ fun MapViewer(
                 modifier = Modifier.align(Alignment.Center).padding(16.dp))
         }
 
-        // Info overlay
+        // Bottom overlay: hover info + zoom controls
         Row(
             modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             val hv = hoverMacro
             if (hv != null) {
@@ -260,8 +328,49 @@ fun MapViewer(
                 Text("${editorState.undoStack.size} edits",
                     color = T.accent.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
             }
-            Text("${(scale * 100).toInt()}%",
-                color = T.textMuted, style = MaterialTheme.typography.bodySmall)
+
+            Spacer(Modifier.width(4.dp))
+
+            // Zoom controls
+            Surface(
+                color = T.surfaceVariant.copy(alpha = 0.8f),
+                shape = MaterialTheme.shapes.small
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        "\u2212",
+                        color = T.textSecondary,
+                        fontSize = 14.sp,
+                        modifier = Modifier
+                            .clickable { scale = (scale / 1.25f).coerceIn(0.5f, 8f) }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                    Text(
+                        "${if (scale > 0) (scale * 100).toInt() else 100}%",
+                        color = T.textSecondary, fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                    Text(
+                        "+",
+                        color = T.textSecondary,
+                        fontSize = 14.sp,
+                        modifier = Modifier
+                            .clickable { scale = (scale * 1.25f).coerceIn(0.5f, 8f) }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                    Text(
+                        "Fit",
+                        color = T.accent,
+                        fontSize = 10.sp,
+                        modifier = Modifier
+                            .clickable { scale = -1f; offset = Offset.Zero }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
         }
 
         // Tool indicator

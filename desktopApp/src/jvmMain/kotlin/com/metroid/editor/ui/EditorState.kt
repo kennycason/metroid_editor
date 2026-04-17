@@ -186,6 +186,11 @@ class EditorState {
         }
     }
 
+    fun selectRoomByNumber(roomNumber: Int) {
+        val room = rooms.find { it.roomNumber == roomNumber }
+        if (room != null) selectRoom(room)
+    }
+
     // -- Painting --
 
     fun beginStroke() {

@@ -1,5 +1,6 @@
 package com.metroid.editor.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +21,7 @@ fun RoomInfoPanel(
     room: Room,
     metroidData: MetroidRomData,
     spaceBudget: RoomEncoder.SpaceBudget? = null,
+    onNavigateToRoom: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val T = EditorTheme
@@ -39,6 +41,41 @@ fun RoomInfoPanel(
                 InfoRow("Palette", "${room.palette}")
                 InfoRow("ROM Offset", "$%06X".format(room.romOffset))
                 InfoRow("Data Size", "${room.rawData.size} bytes")
+
+                val neighbors = metroidData.findRoomNeighbors(room.area, room.roomNumber)
+                if (neighbors != null) {
+                    Spacer(Modifier.height(4.dp))
+                    InfoRow("Map Pos", "(${neighbors.mapX}, ${neighbors.mapY})")
+
+                    val navCallback = onNavigateToRoom
+                    if (navCallback != null) {
+                        val links = listOfNotNull(
+                            neighbors.left?.let { "\u2190" to it },
+                            neighbors.right?.let { "\u2192" to it },
+                            neighbors.up?.let { "\u2191" to it },
+                            neighbors.down?.let { "\u2193" to it }
+                        )
+                        if (links.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Neighbors", fontSize = 11.sp, color = T.textSecondary)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    for ((arrow, roomNum) in links) {
+                                        Text(
+                                            "$arrow \$${"%02X".format(roomNum)}",
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = T.accent,
+                                            modifier = Modifier.clickable { navCallback(roomNum) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             if (spaceBudget != null) {
@@ -92,11 +129,32 @@ fun RoomInfoPanel(
                     val struct = metroidData.readStructure(room.area, obj.structIndex)
                     val macroCount = struct?.rows?.sumOf { it.macroIndices.size } ?: 0
                     val rowCount = struct?.rows?.size ?: 0
-                    val structDesc = "Struct ${"$%02X".format(obj.structIndex)} (${rowCount}r\u00D7${macroCount}m)"
-                    InfoRow(
-                        "Obj $idx",
-                        "(${"$%X".format(obj.posX)},${"$%X".format(obj.posY)}) $structDesc pal=${obj.palette}"
-                    )
+                    val sizeDesc = "${rowCount}r\u00D7${macroCount}m"
+                    val posDesc = "at (${obj.posX},${obj.posY})"
+
+                    // Guess a role based on size/position
+                    val role = when {
+                        rowCount >= 3 && macroCount >= 12 -> "Ceiling/Floor"
+                        rowCount >= 4 && macroCount <= 4 -> "Column"
+                        rowCount == 1 && macroCount >= 6 -> "Platform"
+                        rowCount == 2 && macroCount >= 6 -> "Floor"
+                        macroCount <= 2 && rowCount <= 2 -> "Detail"
+                        else -> "Structure"
+                    }
+
+                    Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("$role $posDesc", fontSize = 11.sp, color = T.textPrimary)
+                            Text("pal ${obj.palette}", fontSize = 10.sp, color = T.textMuted)
+                        }
+                        Text(
+                            "Struct \$${"%02X".format(obj.structIndex)} ($sizeDesc)",
+                            fontSize = 10.sp, color = T.textMuted
+                        )
+                    }
                 }
             }
 

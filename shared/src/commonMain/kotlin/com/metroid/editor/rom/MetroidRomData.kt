@@ -359,4 +359,42 @@ class MetroidRomData(val rom: NesRomParser) {
         val width: Int get() = maxX - minX + 1
         val height: Int get() = maxY - minY + 1
     }
+
+    data class RoomNeighbors(
+        val mapX: Int, val mapY: Int,
+        val left: Int?, val right: Int?, val up: Int?, val down: Int?
+    ) {
+        fun isEmpty() = left == null && right == null && up == null && down == null
+    }
+
+    fun findRoomNeighbors(area: Area, roomNumber: Int): RoomNeighbors? {
+        val cells = readWorldMap()
+        val grid = Array(WORLD_MAP_HEIGHT) { y ->
+            IntArray(WORLD_MAP_WIDTH) { x ->
+                cells[y * WORLD_MAP_WIDTH + x].roomNumber
+            }
+        }
+
+        // Find this room's position in the map — rooms can appear multiple times,
+        // use the first occurrence
+        for (y in 0 until WORLD_MAP_HEIGHT) {
+            for (x in 0 until WORLD_MAP_WIDTH) {
+                if (grid[y][x] == roomNumber) {
+                    fun cellAt(cx: Int, cy: Int): Int? {
+                        if (cx !in 0 until WORLD_MAP_WIDTH || cy !in 0 until WORLD_MAP_HEIGHT) return null
+                        val v = grid[cy][cx]
+                        return if (v == 0xFF || v == roomNumber) null else v
+                    }
+                    return RoomNeighbors(
+                        mapX = x, mapY = y,
+                        left = cellAt(x - 1, y),
+                        right = cellAt(x + 1, y),
+                        up = cellAt(x, y - 1),
+                        down = cellAt(x, y + 1)
+                    )
+                }
+            }
+        }
+        return null
+    }
 }
