@@ -2,15 +2,15 @@ package com.metroid.editor.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.metroid.editor.data.MetroidNames
@@ -47,38 +47,9 @@ fun RoomInfoPanel(
                 val neighbors = metroidData.findRoomNeighbors(room.area, room.roomNumber)
                 if (neighbors != null && !neighbors.isEmpty()) {
                     Spacer(Modifier.height(4.dp))
-
-                    val navCallback = onNavigateToRoom
-                    // Collect all unique connected rooms (deduplicated, sorted)
-                    val allConnected = (neighbors.left + neighbors.right +
-                            neighbors.up + neighbors.down).toSortedSet()
-
-                    if (navCallback != null && allConnected.isNotEmpty()) {
-                        Text("Connected Rooms", fontSize = 11.sp, color = T.textSecondary,
-                            modifier = Modifier.padding(vertical = 2.dp))
-                        // Wrap in a flow layout — each room as a clickable chip
-                        @OptIn(ExperimentalLayoutApi::class)
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            for (roomNum in allConnected) {
-                                Surface(
-                                    color = T.accent.copy(alpha = 0.15f),
-                                    shape = MaterialTheme.shapes.extraSmall,
-                                    modifier = Modifier.clickable { navCallback(roomNum) }
-                                ) {
-                                    Text(
-                                        "\$${"%02X".format(roomNum)}",
-                                        fontSize = 10.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = T.accent,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    Text("Connected Rooms", fontSize = 11.sp, color = T.textSecondary,
+                        modifier = Modifier.padding(vertical = 2.dp))
+                    NeighborDpad(neighbors, room.roomNumber, onNavigateToRoom)
                 }
             }
 
@@ -242,5 +213,87 @@ fun InfoRowColored(label: String, value: String, valueColor: Color) {
     ) {
         Text(label, fontSize = 11.sp, color = T.textSecondary)
         Text(value, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = valueColor)
+    }
+}
+
+@Composable
+private fun NeighborDpad(
+    neighbors: MetroidRomData.RoomNeighbors,
+    currentRoom: Int,
+    onNavigateToRoom: ((Int) -> Unit)?
+) {
+    val T = EditorTheme
+    val cellSize = 40.dp
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        // Top row: up neighbor
+        Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+            DpadCell(neighbors.up, cellSize, onNavigateToRoom)
+        }
+        // Middle row: left, current, right
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            DpadCell(neighbors.left, cellSize, onNavigateToRoom)
+            // Current room in center
+            Surface(
+                color = T.accent.copy(alpha = 0.25f),
+                shape = MaterialTheme.shapes.extraSmall,
+                modifier = Modifier.size(cellSize).padding(1.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Text(
+                        "\$${"%02X".format(currentRoom)}",
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = T.textPrimary,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            DpadCell(neighbors.right, cellSize, onNavigateToRoom)
+        }
+        // Bottom row: down neighbor
+        Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+            DpadCell(neighbors.down, cellSize, onNavigateToRoom)
+        }
+    }
+}
+
+@Composable
+private fun DpadCell(
+    rooms: Set<Int>,
+    cellSize: androidx.compose.ui.unit.Dp,
+    onNavigateToRoom: ((Int) -> Unit)?
+) {
+    val T = EditorTheme
+    if (rooms.isEmpty()) {
+        // Empty placeholder
+        Spacer(Modifier.size(cellSize))
+    } else {
+        val roomNum = rooms.first()
+        val clickMod = if (onNavigateToRoom != null) {
+            Modifier.clickable { onNavigateToRoom(roomNum) }
+        } else Modifier
+        Surface(
+            color = T.accent.copy(alpha = 0.12f),
+            shape = MaterialTheme.shapes.extraSmall,
+            modifier = Modifier.size(cellSize).padding(1.dp).then(clickMod)
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Text(
+                    "\$${"%02X".format(roomNum)}",
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = T.accent,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }

@@ -369,6 +369,48 @@ class MetroidRomData(val rom: NesRomParser) {
         fun isEmpty() = left.isEmpty() && right.isEmpty() && up.isEmpty() && down.isEmpty()
     }
 
+    /**
+     * Build an area ownership map for the 32x32 world map grid.
+     * Flood-fills from each area's start position ($95D7/$95D8) to determine
+     * which cells belong to which area. The world map is shared by all areas
+     * but each region is owned by exactly one area.
+     */
+    fun buildAreaOwnership(): Array<Array<Area?>> {
+        val cells = readWorldMap()
+        val grid = Array(WORLD_MAP_HEIGHT) { y ->
+            IntArray(WORLD_MAP_WIDTH) { x ->
+                cells[y * WORLD_MAP_WIDTH + x].roomNumber
+            }
+        }
+        val ownership = Array(WORLD_MAP_HEIGHT) { arrayOfNulls<Area>(WORLD_MAP_WIDTH) }
+
+        for (area in Area.entries) {
+            val bank = AREA_BANKS[area] ?: continue
+            val startX = rom.readByte(rom.bankAddressToRomOffset(bank, 0x95D7)) and 0xFF
+            val startY = rom.readByte(rom.bankAddressToRomOffset(bank, 0x95D8)) and 0xFF
+
+            if (startX !in 0 until WORLD_MAP_WIDTH || startY !in 0 until WORLD_MAP_HEIGHT) continue
+            if (grid[startY][startX] == 0xFF) continue
+
+            // BFS flood-fill from start position
+            val queue = ArrayDeque<Pair<Int, Int>>()
+            queue.add(startX to startY)
+            while (queue.isNotEmpty()) {
+                val (x, y) = queue.removeFirst()
+                if (x !in 0 until WORLD_MAP_WIDTH || y !in 0 until WORLD_MAP_HEIGHT) continue
+                if (ownership[y][x] != null) continue  // already claimed
+                if (grid[y][x] == 0xFF) continue        // empty cell
+
+                ownership[y][x] = area
+                queue.add(x - 1 to y)
+                queue.add(x + 1 to y)
+                queue.add(x to y - 1)
+                queue.add(x to y + 1)
+            }
+        }
+        return ownership
+    }
+
     fun findRoomNeighbors(area: Area, roomNumber: Int): RoomNeighbors? {
         val cells = readWorldMap()
         val grid = Array(WORLD_MAP_HEIGHT) { y ->
@@ -376,26 +418,18 @@ class MetroidRomData(val rom: NesRomParser) {
                 cells[y * WORLD_MAP_WIDTH + x].roomNumber
             }
         }
-        val areaRoomCount = getRoomCount(area)
+        val ownership = buildAreaOwnership()
 
-        // Read the area's starting map position from $95D7/$95D8
+        // Find all cells where this room appears in THIS area
+        var bestX = -1; var bestY = -1; var bestDist = Int.MAX_VALUE
         val bank = AREA_BANKS[area] ?: return null
         val startX = rom.readByte(rom.bankAddressToRomOffset(bank, 0x95D7)) and 0xFF
         val startY = rom.readByte(rom.bankAddressToRomOffset(bank, 0x95D8)) and 0xFF
 
-        fun validAt(x: Int, y: Int): Int? {
-            if (x !in 0 until WORLD_MAP_WIDTH || y !in 0 until WORLD_MAP_HEIGHT) return null
-            val v = grid[y][x]
-            return if (v == 0xFF || v == roomNumber || v >= areaRoomCount) null else v
-        }
-
-        // Find the occurrence closest to the area's start position.
-        // This ensures we pick the position in the area's actual map region,
-        // not a reuse of the same room number in a distant corridor.
-        var bestX = -1; var bestY = -1; var bestDist = Int.MAX_VALUE
         for (y in 0 until WORLD_MAP_HEIGHT) {
             for (x in 0 until WORLD_MAP_WIDTH) {
                 if (grid[y][x] != roomNumber) continue
+                if (ownership[y][x] != area) continue  // wrong area — skip
                 val dist = kotlin.math.abs(x - startX) + kotlin.math.abs(y - startY)
                 if (dist < bestDist) {
                     bestDist = dist; bestX = x; bestY = y
@@ -403,6 +437,13 @@ class MetroidRomData(val rom: NesRomParser) {
             }
         }
         if (bestX < 0) return null
+
+        fun validAt(x: Int, y: Int): Int? {
+            if (x !in 0 until WORLD_MAP_WIDTH || y !in 0 until WORLD_MAP_HEIGHT) return null
+            if (ownership[y][x] != area) return null  // cross-area — not a scroll neighbor
+            val v = grid[y][x]
+            return if (v == 0xFF || v == roomNumber) null else v
+        }
 
         return RoomNeighbors(
             mapX = bestX, mapY = bestY,
