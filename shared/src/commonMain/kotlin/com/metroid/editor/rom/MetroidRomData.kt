@@ -49,6 +49,65 @@ class MetroidRomData(val rom: NesRomParser) {
             Area.KRAID to 4,
             Area.RIDLEY to 5
         )
+
+        /**
+         * Area ownership for the 32x32 world map grid.
+         * From METEdit (Kent Hansen / SnowBro) — the authoritative source.
+         * 0=Brinstar, 1=Norfair, 2=Tourian, 3=Kraid, 4=Ridley, -1=unused.
+         *
+         * This data is NOT stored in the ROM — the game determines area ownership
+         * implicitly via bank switching at elevators. Both METEdit and Editroid
+         * store this as external metadata.
+         */
+        private val AREA_INDEX_BY_ID = mapOf(
+            0 to Area.BRINSTAR, 1 to Area.NORFAIR, 2 to Area.TOURIAN,
+            3 to Area.KRAID, 4 to Area.RIDLEY
+        )
+
+        // @formatter:off
+        val MAP_AREA_INDEX = arrayOf(
+            //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31
+            intArrayOf(-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1), // 0
+            intArrayOf(-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,-1, 0,-1,-1,-1,-1,-1,-1, 0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1), // 1
+            intArrayOf(-1,-1,-1, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1, 0, 0, 0, 0, 0, 0, 0, 0,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,-1), // 2
+            intArrayOf(-1, 2,-1, 0,-1,-1,-1,-1,-1,-1,-1, 0,-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1), // 3
+            intArrayOf(-1, 2,-1, 2,-1,-1,-1,-1,-1,-1,-1, 0,-1, 0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,-1), // 4
+            intArrayOf(-1, 2,-1, 2,-1,-1, 0, 0, 0, 0, 0, 0,-1, 0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, 0, 0, 0, 0, 0, 0,-1), // 5
+            intArrayOf(-1, 2,-1, 2,-1,-1,-1,-1,-1,-1,-1, 0,-1, 0,-1,-1,-1,-1, 0,-1,-1,-1, 0,-1,-1,-1,-1,-1,-1,-1, 0,-1), // 6
+            intArrayOf(-1, 2,-1, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1), // 7
+            intArrayOf(-1, 2,-1,-1,-1,-1,-1,-1,-1,-1, 2, 0,-1, 0,-1,-1,-1,-1, 0,-1,-1,-1, 0,-1,-1,-1,-1,-1,-1,-1, 0,-1), // 8
+            intArrayOf(-1, 2,-1,-1,-1,-1,-1,-1,-1,-1, 2, 0,-1, 0,-1,-1,-1,-1, 0, 0, 0, 0, 0,-1, 1,-1,-1,-1,-1,-1, 1,-1), // 9
+            intArrayOf(-1, 2,-1,-1,-1,-1,-1,-1,-1,-1, 2, 0,-1, 0,-1,-1,-1,-1, 0,-1,-1,-1, 0,-1, 1, 1, 1, 1, 1, 1, 1,-1), // 10
+            intArrayOf(-1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0,-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1, 1, 1, 1, 1, 1, 1, 1,-1), // 11
+            intArrayOf(-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,-1, 0,-1,-1,-1,-1,-1,-1,-1,-1, 0,-1, 1, 1, 1, 1, 1, 1, 1,-1), // 12
+            intArrayOf(-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,-1, 1,-1,-1,-1,-1,-1,-1,-1,-1, 1,-1, 1,-1,-1,-1,-1,-1, 1,-1), // 13
+            intArrayOf(-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,-1), // 14
+            intArrayOf(-1,-1,-1,-1,-1,-1, 0,-1,-1,-1,-1, 0,-1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,-1), // 15
+            intArrayOf(-1,-1,-1,-1,-1,-1, 0,-1, 3,-1,-1, 3,-1, 1, 1, 1, 1, 1, 1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 1,-1), // 16
+            intArrayOf(-1,-1,-1,-1,-1,-1, 0,-1, 3, 3, 3, 3,-1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,-1), // 17
+            intArrayOf(-1,-1,-1,-1,-1,-1, 3, 3, 3, 3, 3, 3,-1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,-1), // 18
+            intArrayOf(-1,-1,-1,-1,-1,-1, 3, 3, 3, 3, 3, 3,-1, 1,-1,-1,-1, 1, 1,-1,-1,-1,-1,-1,-1, 1, 1, 1, 1, 1, 1,-1), // 19
+            intArrayOf(-1, 3,-1,-1,-1,-1,-1, 3, 3,-1,-1, 3,-1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,-1), // 20
+            intArrayOf(-1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,-1, 1,-1,-1,-1, 1, 1, 1, 1, 1,-1,-1, 1, 1, 1, 1, 1, 1, 1,-1), // 21
+            intArrayOf(-1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,-1, 1,-1,-1, 1, 1, 1, 1, 1, 1,-1,-1, 1, 1,-1,-1,-1,-1, 1,-1), // 22
+            intArrayOf(-1, 3,-1,-1, 3,-1,-1, 3,-1,-1,-1,-1, 3,-1,-1,-1,-1, 1,-1,-1,-1,-1,-1, 4, 1, 1,-1,-1,-1,-1, 1,-1), // 23
+            intArrayOf(-1, 3,-1,-1, 3, 3, 3, 3, 3, 3, 3, 3, 3,-1, 4,-1,-1, 4, 4, 4, 4, 4, 4, 4, 4, 4,-1,-1,-1,-1, 4,-1), // 24
+            intArrayOf(-1, 3,-1,-1, 3,-1,-1, 3,-1, 3, 3, 3, 3,-1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,-1), // 25
+            intArrayOf(-1, 3,-1,-1, 3, 3, 3, 3, 3, 3,-1, 3, 3,-1, 4,-1,-1, 4,-1,-1,-1,-1, 4,-1,-1,-1,-1,-1,-1,-1, 4,-1), // 26
+            intArrayOf(-1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,-1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,-1), // 27
+            intArrayOf(-1, 3,-1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,-1, 4,-1,-1,-1,-1,-1,-1,-1, 4,-1,-1,-1,-1,-1,-1,-1, 4,-1), // 28
+            intArrayOf(-1,-1,-1,-1,-1,-1,-1,-1, 3, 3, 3, 3, 3,-1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,-1), // 29
+            intArrayOf(-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 3,-1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,-1), // 30
+            intArrayOf(-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1), // 31
+        )
+        // @formatter:on
+
+        /** Look up which area owns a given world map cell. */
+        fun areaAt(mapX: Int, mapY: Int): Area? {
+            if (mapX !in 0 until WORLD_MAP_WIDTH || mapY !in 0 until WORLD_MAP_HEIGHT) return null
+            val idx = MAP_AREA_INDEX[mapY][mapX]
+            return if (idx < 0) null else AREA_INDEX_BY_ID[idx]
+        }
     }
 
     data class AreaPointers(
@@ -364,93 +423,84 @@ class MetroidRomData(val rom: NesRomParser) {
 
     data class RoomNeighbors(
         val mapX: Int, val mapY: Int,
-        val left: Set<Int>, val right: Set<Int>, val up: Set<Int>, val down: Set<Int>
+        val left: NeighborCell?, val right: NeighborCell?,
+        val up: NeighborCell?, val down: NeighborCell?
     ) {
-        fun isEmpty() = left.isEmpty() && right.isEmpty() && up.isEmpty() && down.isEmpty()
+        fun isEmpty() = left == null && right == null && up == null && down == null
     }
+
+    data class NeighborCell(val roomNumber: Int, val mapX: Int, val mapY: Int)
 
     /**
-     * Build an area ownership map for the 32x32 world map grid.
-     * Flood-fills from each area's start position ($95D7/$95D8) to determine
-     * which cells belong to which area. The world map is shared by all areas
-     * but each region is owned by exactly one area.
+     * Find the neighboring rooms for a given room on the 32x32 world map.
+     *
+     * The world map is shared by ALL areas — there is no per-cell area ownership
+     * stored in the ROM. The game determines area via bank switching at elevators.
+     * Room connections are purely based on map adjacency (what GetRoomNum does).
+     *
+     * If [hintMapX]/[hintMapY] is provided (from D-pad navigation), that exact
+     * position is used. Otherwise, finds the closest occurrence of [roomNumber]
+     * to the area's start position.
      */
-    fun buildAreaOwnership(): Array<Array<Area?>> {
+    fun findRoomNeighbors(
+        area: Area, roomNumber: Int,
+        hintMapX: Int? = null, hintMapY: Int? = null
+    ): RoomNeighbors? {
         val cells = readWorldMap()
         val grid = Array(WORLD_MAP_HEIGHT) { y ->
             IntArray(WORLD_MAP_WIDTH) { x ->
                 cells[y * WORLD_MAP_WIDTH + x].roomNumber
             }
         }
-        val ownership = Array(WORLD_MAP_HEIGHT) { arrayOfNulls<Area>(WORLD_MAP_WIDTH) }
 
-        for (area in Area.entries) {
-            val bank = AREA_BANKS[area] ?: continue
+        val posX: Int
+        val posY: Int
+
+        if (hintMapX != null && hintMapY != null
+            && hintMapX in 0 until WORLD_MAP_WIDTH
+            && hintMapY in 0 until WORLD_MAP_HEIGHT
+            && grid[hintMapY][hintMapX] == roomNumber
+            && areaAt(hintMapX, hintMapY) == area  // must be in correct area
+        ) {
+            posX = hintMapX
+            posY = hintMapY
+        } else {
+            // Fallback: find closest occurrence in this area's region
+            val bank = AREA_BANKS[area] ?: return null
             val startX = rom.readByte(rom.bankAddressToRomOffset(bank, 0x95D7)) and 0xFF
             val startY = rom.readByte(rom.bankAddressToRomOffset(bank, 0x95D8)) and 0xFF
-
-            if (startX !in 0 until WORLD_MAP_WIDTH || startY !in 0 until WORLD_MAP_HEIGHT) continue
-            if (grid[startY][startX] == 0xFF) continue
-
-            // BFS flood-fill from start position
-            val queue = ArrayDeque<Pair<Int, Int>>()
-            queue.add(startX to startY)
-            while (queue.isNotEmpty()) {
-                val (x, y) = queue.removeFirst()
-                if (x !in 0 until WORLD_MAP_WIDTH || y !in 0 until WORLD_MAP_HEIGHT) continue
-                if (ownership[y][x] != null) continue  // already claimed
-                if (grid[y][x] == 0xFF) continue        // empty cell
-
-                ownership[y][x] = area
-                queue.add(x - 1 to y)
-                queue.add(x + 1 to y)
-                queue.add(x to y - 1)
-                queue.add(x to y + 1)
-            }
-        }
-        return ownership
-    }
-
-    fun findRoomNeighbors(area: Area, roomNumber: Int): RoomNeighbors? {
-        val cells = readWorldMap()
-        val grid = Array(WORLD_MAP_HEIGHT) { y ->
-            IntArray(WORLD_MAP_WIDTH) { x ->
-                cells[y * WORLD_MAP_WIDTH + x].roomNumber
-            }
-        }
-        val ownership = buildAreaOwnership()
-
-        // Find all cells where this room appears in THIS area
-        var bestX = -1; var bestY = -1; var bestDist = Int.MAX_VALUE
-        val bank = AREA_BANKS[area] ?: return null
-        val startX = rom.readByte(rom.bankAddressToRomOffset(bank, 0x95D7)) and 0xFF
-        val startY = rom.readByte(rom.bankAddressToRomOffset(bank, 0x95D8)) and 0xFF
-
-        for (y in 0 until WORLD_MAP_HEIGHT) {
-            for (x in 0 until WORLD_MAP_WIDTH) {
-                if (grid[y][x] != roomNumber) continue
-                if (ownership[y][x] != area) continue  // wrong area — skip
-                val dist = kotlin.math.abs(x - startX) + kotlin.math.abs(y - startY)
-                if (dist < bestDist) {
-                    bestDist = dist; bestX = x; bestY = y
+            var bestX = -1; var bestY = -1; var bestDist = Int.MAX_VALUE
+            for (y in 0 until WORLD_MAP_HEIGHT) {
+                for (x in 0 until WORLD_MAP_WIDTH) {
+                    if (grid[y][x] != roomNumber) continue
+                    if (areaAt(x, y) != area) continue
+                    val dist = kotlin.math.abs(x - startX) + kotlin.math.abs(y - startY)
+                    if (dist < bestDist) {
+                        bestDist = dist; bestX = x; bestY = y
+                    }
                 }
             }
+            if (bestX < 0) return null
+            posX = bestX
+            posY = bestY
         }
-        if (bestX < 0) return null
 
-        fun validAt(x: Int, y: Int): Int? {
+        // Only show neighbors within the same area — cross-area navigation
+        // happens via elevators, not scrolling
+        fun neighborAt(x: Int, y: Int): NeighborCell? {
             if (x !in 0 until WORLD_MAP_WIDTH || y !in 0 until WORLD_MAP_HEIGHT) return null
-            if (ownership[y][x] != area) return null  // cross-area — not a scroll neighbor
             val v = grid[y][x]
-            return if (v == 0xFF || v == roomNumber) null else v
+            if (v == 0xFF) return null
+            if (areaAt(x, y) != area) return null  // different area = elevator boundary
+            return NeighborCell(v, x, y)
         }
 
         return RoomNeighbors(
-            mapX = bestX, mapY = bestY,
-            left = setOfNotNull(validAt(bestX - 1, bestY)),
-            right = setOfNotNull(validAt(bestX + 1, bestY)),
-            up = setOfNotNull(validAt(bestX, bestY - 1)),
-            down = setOfNotNull(validAt(bestX, bestY + 1))
+            mapX = posX, mapY = posY,
+            left = neighborAt(posX - 1, posY),
+            right = neighborAt(posX + 1, posY),
+            up = neighborAt(posX, posY - 1),
+            down = neighborAt(posX, posY + 1)
         )
     }
 }

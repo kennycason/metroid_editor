@@ -1,49 +1,55 @@
 # Connect Rooms Bug Analysis
 
-## Problem
+## Problem (Resolved)
 
 Room connections shown in the editor were ~10% correct. The `findRoomNeighbors()` method
-in `MetroidRomData.kt` returned wrong neighbors for most rooms.
+returned wrong neighbors for most rooms.
 
-## Root Cause: Missing Area Ownership Map
+## Root Cause: Area Ownership Cannot Be Derived from ROM
 
 The world map is a shared 32x32 grid used by ALL areas. Room numbers are **per-area** --
 room #5 in Brinstar is completely different from room #5 in Norfair. But the world map
 stores just raw room numbers with no area tag.
 
-The engine handles this implicitly: it always loads rooms from the currently-swapped area
-bank, so it never confuses room #5 in Brinstar with room #5 in Norfair. The engine only
-changes areas via elevators.
+### Why flood-fill fails
 
-## Fix Applied (April 2026)
+All areas are physically adjacent on the map with **no $FF barriers** between them.
+Room number ranges overlap completely (all areas have rooms 0x00 through 0x20+).
+Any flood-fill approach claims the entire connected map for whichever area processes first.
 
-### `buildAreaOwnership()` -- New Method
+### How METEdit solves it
 
-Flood-fills from each area's start position ($95D7/$95D8) across valid (non-$FF) world
-map cells. Each cell gets tagged with its owning `Area`. First area to claim a cell wins
-(BFS order). This mirrors METEdit's `MapIndex` array concept.
+METEdit hardcodes a `MapIndex[32*32]` array -- 1024 bytes mapping each cell to its area
+(0=Brinstar, 1=Norfair, 2=Tourian, 3=Kraid, 4=Ridley). This data is stored externally,
+not read from ROM. Editroid does the same via project files.
 
-### Updated `findRoomNeighbors()`
+### Our solution: Embedded MAP_AREA_INDEX + position tracking
 
-1. **Room search filters by area ownership** -- only considers cells owned by the correct
-   area, eliminating cross-area collisions
-2. **`validAt()` filters by area ownership** -- adjacent cells in different areas are no
-   longer returned as neighbors
+1. **`MAP_AREA_INDEX`** -- Embedded in `MetroidRomData.kt` companion object, sourced from
+   METEdit's proven `MapIndex` array. Used by `areaAt(mapX, mapY)` to determine which
+   area owns any map cell. This is the ONLY reliable way to determine area ownership.
 
-### UI: D-pad Grid Layout
+2. **`findRoomNeighbors(area, roomNum, hintMapX, hintMapY)`** -- When navigating via D-pad,
+   uses exact position. For initial room selection (from room list), filters by
+   `MAP_AREA_INDEX` to find the correct instance of the room in the right area.
 
-Replaced the flat row of clickable room chips with a 3x3 D-pad grid layout in
-`RoomInfoPanel.kt`. Current room shown in center, neighbors shown at their spatial
-positions (up/down/left/right). Each neighbor is clickable for navigation.
+3. **`NeighborCell(roomNumber, mapX, mapY)`** -- neighbors carry their exact map position.
+   D-pad clicks pass (mapX, mapY) through `EditorState.currentMapPos` for subsequent lookups.
 
-## Remaining Edge Cases
+## Fix History
 
-1. **Elevator cells** -- claimed by whichever area floods first. Elevators connect areas
-   but aren't scroll-accessible neighbors.
+1. **v1 (broken)**: Proximity to area start, no area ownership. Failed because room $21
+   appears in 4 areas and proximity picks the wrong one.
 
-2. **Disconnected regions** -- item rooms accessed only via special items may not be
-   reachable by flood-fill from the area start. These would show no neighbors.
+2. **v2 (broken)**: Flood-fill area ownership. Failed because areas share map edges with
+   no $FF barriers -- first area claims all 511 cells.
 
-3. **Room reuse at multiple positions** -- same room number at multiple map cells within
-   one area. Currently picks closest to area start; ideally should track which map
-   position the user navigated to.
+3. **v3 (current)**: Embedded MAP_AREA_INDEX from METEdit + D-pad position tracking.
+   Verified with 12 unit tests against known map data from m1map_room_ids.png.
+
+## Remaining Limitations
+
+- **ROM hacks with different area layouts**: MAP_AREA_INDEX would need updating. Could be
+  stored in project files like Editroid does.
+- **Room reuse at multiple positions in same area**: picks closest to area start for
+  initial selection; once navigating via D-pad, always correct.

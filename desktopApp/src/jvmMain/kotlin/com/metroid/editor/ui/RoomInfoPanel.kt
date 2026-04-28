@@ -23,7 +23,8 @@ fun RoomInfoPanel(
     room: Room,
     metroidData: MetroidRomData,
     spaceBudget: RoomEncoder.SpaceBudget? = null,
-    onNavigateToRoom: ((Int) -> Unit)? = null,
+    mapPos: Pair<Int, Int>? = null,
+    onNavigateToRoom: ((Int, Int, Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val T = EditorTheme
@@ -44,11 +45,17 @@ fun RoomInfoPanel(
                 InfoRow("ROM Offset", "$%06X".format(room.romOffset))
                 InfoRow("Data Size", "${room.rawData.size} bytes")
 
-                val neighbors = metroidData.findRoomNeighbors(room.area, room.roomNumber)
+                val neighbors = metroidData.findRoomNeighbors(
+                    room.area, room.roomNumber,
+                    hintMapX = mapPos?.first, hintMapY = mapPos?.second
+                )
                 if (neighbors != null && !neighbors.isEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    Text("Connected Rooms", fontSize = 11.sp, color = T.textSecondary,
-                        modifier = Modifier.padding(vertical = 2.dp))
+                    Text(
+                        "Connected Rooms (${neighbors.mapX},${neighbors.mapY})",
+                        fontSize = 11.sp, color = T.textSecondary,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
                     NeighborDpad(neighbors, room.roomNumber, onNavigateToRoom)
                 }
             }
@@ -220,7 +227,7 @@ fun InfoRowColored(label: String, value: String, valueColor: Color) {
 private fun NeighborDpad(
     neighbors: MetroidRomData.RoomNeighbors,
     currentRoom: Int,
-    onNavigateToRoom: ((Int) -> Unit)?
+    onNavigateToRoom: ((Int, Int, Int) -> Unit)?
 ) {
     val T = EditorTheme
     val cellSize = 40.dp
@@ -267,18 +274,16 @@ private fun NeighborDpad(
 
 @Composable
 private fun DpadCell(
-    rooms: Set<Int>,
+    neighbor: MetroidRomData.NeighborCell?,
     cellSize: androidx.compose.ui.unit.Dp,
-    onNavigateToRoom: ((Int) -> Unit)?
+    onNavigateToRoom: ((Int, Int, Int) -> Unit)?
 ) {
     val T = EditorTheme
-    if (rooms.isEmpty()) {
-        // Empty placeholder
+    if (neighbor == null) {
         Spacer(Modifier.size(cellSize))
     } else {
-        val roomNum = rooms.first()
         val clickMod = if (onNavigateToRoom != null) {
-            Modifier.clickable { onNavigateToRoom(roomNum) }
+            Modifier.clickable { onNavigateToRoom(neighbor.roomNumber, neighbor.mapX, neighbor.mapY) }
         } else Modifier
         Surface(
             color = T.accent.copy(alpha = 0.12f),
@@ -287,7 +292,7 @@ private fun DpadCell(
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 Text(
-                    "\$${"%02X".format(roomNum)}",
+                    "\$${"%02X".format(neighbor.roomNumber)}",
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
                     color = T.accent,

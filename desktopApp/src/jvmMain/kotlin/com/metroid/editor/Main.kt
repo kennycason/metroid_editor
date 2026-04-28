@@ -281,7 +281,10 @@ fun MetroidEditorApp(
                         room = room,
                         metroidData = md,
                         spaceBudget = editorState.spaceBudget,
-                        onNavigateToRoom = { roomNum -> editorState.selectRoomByNumber(roomNum) },
+                        mapPos = editorState.currentMapPos,
+                        onNavigateToRoom = { roomNum, mapX, mapY ->
+                            editorState.selectRoomByNumber(roomNum, mapX, mapY)
+                        },
                         modifier = Modifier.width(260.dp).fillMaxHeight()
                     )
                 }

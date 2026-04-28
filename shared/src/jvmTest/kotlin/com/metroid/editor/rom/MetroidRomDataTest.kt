@@ -199,4 +199,144 @@ class MetroidRomDataTest {
         assertFalse(startCell!!.isEmpty, "Samus start position should have a room")
         println("Samus start room: 0x%02X".format(startCell.roomNumber))
     }
+
+    // --- Room neighbor tests verified against m1map_room_ids.png ---
+
+    @Test
+    fun `MAP_AREA_INDEX covers all non-FF cells`() {
+        val d = data ?: return
+        val cells = d.readWorldMap()
+        var missingArea = 0
+        for (cell in cells) {
+            if (!cell.isEmpty) {
+                val area = MetroidRomData.areaAt(cell.x, cell.y)
+                if (area == null) {
+                    missingArea++
+                    println("  Cell (${cell.x},${cell.y}) room=$%02X has no area".format(cell.roomNumber))
+                }
+            }
+        }
+        assertEquals(0, missingArea, "All non-FF cells must have an area assignment")
+    }
+
+    @Test
+    fun `Brinstar room 09 at start position has correct neighbors`() {
+        val d = data ?: return
+        // Brinstar starts at (3,14), room $09
+        val n = d.findRoomNeighbors(Area.BRINSTAR, 0x09)
+        assertNotNull(n)
+        assertEquals(3, n!!.mapX)
+        assertEquals(14, n.mapY)
+        // Left: (2,14) = $17, Right: (4,14) = $14
+        assertEquals(0x17, n.left?.roomNumber, "Left of start should be room \$17")
+        assertEquals(0x14, n.right?.roomNumber, "Right of start should be room \$14")
+    }
+
+    @Test
+    fun `Brinstar horizontal shaft room 14 right of start`() {
+        val d = data ?: return
+        // (4,14) = room $14 in Brinstar
+        val n = d.findRoomNeighbors(Area.BRINSTAR, 0x14, hintMapX = 4, hintMapY = 14)
+        assertNotNull(n)
+        assertEquals(0x09, n!!.left?.roomNumber, "Left should be room \$09")
+        assertEquals(0x13, n.right?.roomNumber, "Right should be room \$13")
+    }
+
+    @Test
+    fun `Brinstar room 18 has left right and down neighbors`() {
+        val d = data ?: return
+        // From the map: (6,14) = room $18, left=(5,14)=$13, right=(7,14)=$12
+        val n = d.findRoomNeighbors(Area.BRINSTAR, 0x18, hintMapX = 6, hintMapY = 14)
+        assertNotNull(n)
+        assertEquals(0x13, n!!.left?.roomNumber, "Left of \$18 should be \$13")
+        assertEquals(0x12, n.right?.roomNumber, "Right of \$18 should be \$12")
+    }
+
+    @Test
+    fun `Norfair room 08 at top-left shaft entrance`() {
+        val d = data ?: return
+        // Norfair: (13,14) = room $08 (from map)
+        val n = d.findRoomNeighbors(Area.NORFAIR, 0x08, hintMapX = 13, hintMapY = 14)
+        assertNotNull(n)
+        assertEquals(13, n!!.mapX)
+        assertEquals(14, n.mapY)
+        assertEquals(0x1D, n.right?.roomNumber, "Right of Norfair \$08 should be \$1D")
+    }
+
+    @Test
+    fun `Brinstar room 08 at map position 1_14 is Brinstar not Norfair`() {
+        val d = data ?: return
+        // (1,14) = room $08 in Brinstar (from MapIndex)
+        assertEquals(Area.BRINSTAR, MetroidRomData.areaAt(1, 14))
+        // (13,14) = room $08 in Norfair
+        assertEquals(Area.NORFAIR, MetroidRomData.areaAt(13, 14))
+    }
+
+    @Test
+    fun `Brinstar start shaft rooms 08-17-09-14-13 connect horizontally`() {
+        val d = data ?: return
+        // Known Brinstar horizontal shaft from m1map: (1,14)=$08, (2,14)=$17, (3,14)=$09, (4,14)=$14, (5,14)=$13
+        val cells = d.readWorldMap()
+        fun roomAt(x: Int, y: Int) = cells[y * 32 + x].roomNumber
+
+        assertEquals(0x08, roomAt(1, 14), "Map (1,14)")
+        assertEquals(0x17, roomAt(2, 14), "Map (2,14)")
+        assertEquals(0x09, roomAt(3, 14), "Map (3,14)")
+        assertEquals(0x14, roomAt(4, 14), "Map (4,14)")
+        assertEquals(0x13, roomAt(5, 14), "Map (5,14)")
+        assertEquals(0x18, roomAt(6, 14), "Map (6,14)")
+        assertEquals(0x12, roomAt(7, 14), "Map (7,14)")
+
+        // Verify navigation chain works
+        val n1 = d.findRoomNeighbors(Area.BRINSTAR, 0x08, 1, 14)!!
+        assertEquals(0x17, n1.right?.roomNumber)
+
+        val n2 = d.findRoomNeighbors(Area.BRINSTAR, 0x17, 2, 14)!!
+        assertEquals(0x08, n2.left?.roomNumber)
+        assertEquals(0x09, n2.right?.roomNumber)
+
+        val n3 = d.findRoomNeighbors(Area.BRINSTAR, 0x09, 3, 14)!!
+        assertEquals(0x17, n3.left?.roomNumber)
+        assertEquals(0x14, n3.right?.roomNumber)
+    }
+
+    @Test
+    fun `Kraid area cells are correctly attributed`() {
+        val d = data ?: return
+        // Kraid occupies bottom-left region
+        assertEquals(Area.KRAID, MetroidRomData.areaAt(1, 21))
+        assertEquals(Area.KRAID, MetroidRomData.areaAt(8, 24))
+        assertEquals(Area.KRAID, MetroidRomData.areaAt(12, 30))
+    }
+
+    @Test
+    fun `Ridley area cells are correctly attributed`() {
+        val d = data ?: return
+        assertEquals(Area.RIDLEY, MetroidRomData.areaAt(14, 25))
+        assertEquals(Area.RIDLEY, MetroidRomData.areaAt(25, 25))
+        assertEquals(Area.RIDLEY, MetroidRomData.areaAt(30, 29))
+    }
+
+    @Test
+    fun `Tourian area cells are correctly attributed`() {
+        val d = data ?: return
+        assertEquals(Area.TOURIAN, MetroidRomData.areaAt(1, 3))
+        assertEquals(Area.TOURIAN, MetroidRomData.areaAt(3, 4))
+        assertEquals(Area.TOURIAN, MetroidRomData.areaAt(10, 7))
+    }
+
+    @Test
+    fun `room 21 is found in correct area region`() {
+        val d = data ?: return
+        // Room $21 exists in Brinstar at (22,3), Norfair at (14,17), Kraid at (10,27)
+        val brinN = d.findRoomNeighbors(Area.BRINSTAR, 0x21)
+        assertNotNull(brinN)
+        assertEquals(Area.BRINSTAR, MetroidRomData.areaAt(brinN!!.mapX, brinN.mapY),
+            "Brinstar room \$21 should be in Brinstar region")
+
+        val norN = d.findRoomNeighbors(Area.NORFAIR, 0x21)
+        assertNotNull(norN)
+        assertEquals(Area.NORFAIR, MetroidRomData.areaAt(norN!!.mapX, norN.mapY),
+            "Norfair room \$21 should be in Norfair region")
+    }
 }

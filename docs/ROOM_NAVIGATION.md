@@ -61,19 +61,31 @@ Each area occupies a distinct region. Start positions per area (from `$95D7`/`$9
 different room from room #5 in Norfair. The world map stores room numbers without area tags —
 the engine knows which area it's in via `InArea` ($74) and uses the corresponding area bank.
 
-### Area Ownership
+### Area Ownership — The Unsolvable Problem
 
-The world map itself does NOT tag cells with area IDs. The game tracks the current area
-in `InArea` and only changes it via elevator transitions. When scrolling, the engine always
+The world map does NOT tag cells with area IDs. The game tracks the current area in
+`InArea` and only changes it via elevator transitions. When scrolling, the engine always
 loads rooms from the current area bank, so it implicitly assumes all adjacent cells belong
 to the same area.
 
-**For an editor**, this means you need a separate **area ownership map** (like METEdit's
-`MapIndex` array) to know which cells belong to which area. This can be derived by:
-1. Starting from each area's start position
-2. Flood-filling through adjacent valid (non-$FF) cells
-3. Marking each reached cell as belonging to that area
-4. Elevator cells are shared boundaries between areas
+**This cannot be reliably derived from ROM data.** The areas are physically adjacent on
+the grid with no $FF barriers between them, and room number ranges overlap completely
+(all areas have rooms 0x00-0x2E). Flood-fill from area starts claims the entire connected
+map for whichever area is processed first.
+
+**METEdit's solution:** Hardcoded `MapIndex[32*32]` array — a 1024-byte lookup table
+mapping each cell to its area (0=Brinstar, 1=Norfair, 2=Tourian, 3=Kraid, 4=Ridley).
+This data is stored/loaded externally, NOT read from ROM. Editroid does the same.
+
+**Our editor's approach:** Track map position through navigation. When users navigate
+via the D-pad, each click passes the exact (mapX, mapY) of the destination cell.
+Neighbors are determined purely by world map adjacency — no area ownership needed.
+For initial room selection (from the room list), proximity to the area's start
+position is used as a best-effort heuristic.
+
+**From SnowBro (METEdit author):** "The same room can be used multiple times on the map.
+You've probably noticed that many of the places in Metroid look very similar. Well, now
+you know the reason: technically, they are the same place!"
 
 ---
 

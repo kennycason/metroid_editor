@@ -35,6 +35,7 @@ class EditorState {
     // UI navigation
     var selectedArea by mutableStateOf(Area.BRINSTAR)
     var selectedRoom by mutableStateOf<Room?>(null)
+    var currentMapPos by mutableStateOf<Pair<Int, Int>?>(null)
     var rooms by mutableStateOf<List<Room>>(emptyList()); private set
     var statusMessage by mutableStateOf("No ROM loaded")
 
@@ -178,6 +179,7 @@ class EditorState {
     fun selectRoom(room: Room?) {
         saveCurrentRoomEdits()
         selectedRoom = room
+        currentMapPos = null  // reset — will use proximity fallback
         undoStack.clear()
         redoStack.clear()
         undoVersion++
@@ -197,9 +199,22 @@ class EditorState {
         }
     }
 
-    fun selectRoomByNumber(roomNumber: Int) {
+    fun selectRoomByNumber(roomNumber: Int, mapX: Int? = null, mapY: Int? = null) {
         val room = rooms.find { it.roomNumber == roomNumber }
-        if (room != null) selectRoom(room)
+        if (room != null) {
+            val newMapPos = if (mapX != null && mapY != null) mapX to mapY else null
+            val isSameRoom = room == selectedRoom
+            if (isSameRoom && newMapPos != null) {
+                // Same room but different map position (room reuse) —
+                // just update the map pos to refresh the D-pad neighbors
+                currentMapPos = newMapPos
+                editVersion++  // force recomposition
+            } else {
+                selectRoom(room)
+                // Set map pos AFTER selectRoom (which clears it)
+                currentMapPos = newMapPos
+            }
+        }
     }
 
     // -- Painting --

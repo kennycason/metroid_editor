@@ -46,21 +46,15 @@ fun RoomListPanel(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                "$%02X".format(room.roomNumber),
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
-                                color = if (isSelected) T.accent else T.textMuted
-                            )
-                            Spacer(Modifier.width(8.dp))
                             Column {
                                 Text(
-                                    "Room ${room.roomNumber}",
+                                    "Room \$${"%02X".format(room.roomNumber)}",
+                                    fontFamily = FontFamily.Monospace,
                                     fontSize = 13.sp,
                                     color = if (isSelected) T.textPrimary else T.textSecondary
                                 )
                                 Text(
-                                    "${room.objects.size} objects, ${room.enemies.size} enemies, ${room.doors.size} doors",
+                                    "${room.objects.size} obj, ${room.enemies.size} enemies, ${room.doors.size} doors",
                                     fontSize = 10.sp,
                                     color = T.textMuted
                                 )

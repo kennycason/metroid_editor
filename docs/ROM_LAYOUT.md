@@ -1,6 +1,7 @@
 # Metroid NES ROM Layout & Data Format Reference
 
-Synthesized from: metroid-disassembly, m1disasm, MetroidMMC3, Editroid, METEdit.
+Synthesized from: metroid-disassembly, m1disasm, MetroidMMC3, Editroid, METEdit,
+SnowBro's "Metroid Level Data Explained" (metroiddatabase.com).
 
 ---
 
@@ -251,3 +252,19 @@ Background tiles → PPU $1000-$1FFF (pattern table 1, 256 tiles).
 | Room RAM buffer     | 1024 bytes each          | Hardware        |
 | Bank size           | $4000 (16384) bytes      | MMC1 mapper     |
 | World map           | 32x32 = 1024 cells       | Fixed           |
+
+---
+
+## 12. Quick ROM Offset Reference (SnowBro)
+
+Absolute ROM file offsets for level data (includes 16-byte iNES header):
+
+| Area     | Palette      | Room Ptrs    | Struct Ptrs  | Room Data      | Struct Defs    | Tile Defs  |
+|----------|-------------|-------------|-------------|----------------|----------------|------------|
+| Brinstar | $06284      | $06324      | $06382      | $06451-$06C93  | $06C94-$06EFF  | $06F00+    |
+| Norfair  | $0A18B      | $0A22B      | $0A287      | $0A3BB-$0ACC8  | $0ACC9-$0AEFB  | $0AEFC+    |
+| Tourian  | $0E72B      | $0E7E1      | $0E80B      | $0E8BF-$0EC25  | $0EC26-$0EE58  | $0EE59+    |
+| Kraid    | $12168      | $121E5      | $1222F      | $122C7-$12A7A  | $12A7B-$12C41  | $12C42+    |
+| Ridley   | $160FE      | $1618F      | $161E3      | $1624F-$169CE  | $169CF-$16B32  | $16B33+    |
+
+World map: $0254E-$0294D (1024 bytes, 32x32 grid)
