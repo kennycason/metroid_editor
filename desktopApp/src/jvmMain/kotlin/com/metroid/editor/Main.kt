@@ -58,6 +58,10 @@ fun main() = application {
                         if (editorState.isRomLoaded) showExportRomDialog(null, editorState)
                         true
                     }
+                    mod && keyEvent.key == Key.M -> {
+                        if (editorState.isRomLoaded) editorState.toggleViewMode()
+                        true
+                    }
                     // Tool shortcuts (no modifier)
                     !mod && keyEvent.key == Key.P -> {
                         editorState.activeTool = EditorTool.PAINT; true
@@ -156,6 +160,14 @@ fun MetroidEditorApp(
                     }
 
                     if (editorState.isRomLoaded) {
+                        TextButton(onClick = { editorState.toggleViewMode() }) {
+                            Text(
+                                if (editorState.viewMode == EditorViewMode.WORLD_MAP) "Room View" else "Whole Map",
+                                fontSize = 12.sp,
+                                color = T.actionPrimary
+                            )
+                        }
+
                         TextButton(onClick = { editorState.undo() }, enabled = editorState.canUndo) {
                             Text("Undo", fontSize = 12.sp,
                                 color = if (editorState.canUndo) T.actionPrimary else T.actionDisabled)
@@ -186,6 +198,9 @@ fun MetroidEditorApp(
                         }
                         TextButton(onClick = { showExportRomDialog(parentWindow, editorState) }) {
                             Text("Export ROM", fontSize = 12.sp, color = T.exportGreen)
+                        }
+                        TextButton(onClick = { showExportMapImageDialog(parentWindow, editorState) }) {
+                            Text("Export Map", fontSize = 12.sp, color = T.exportGreen)
                         }
                     }
                 },
@@ -245,7 +260,12 @@ fun MetroidEditorApp(
                 ) {
                     val room = editorState.selectedRoom
                     val renderer = editorState.mapRenderer
-                    if (room != null && renderer != null) {
+                    if (editorState.viewMode == EditorViewMode.WORLD_MAP && renderer != null) {
+                        WholeMapViewer(
+                            editorState = editorState,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else if (room != null && renderer != null) {
                         MapViewer(
                             room = room,
                             renderer = renderer,
@@ -310,13 +330,21 @@ fun MetroidEditorApp(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (editorState.isRomLoaded) {
-                            ToggleChip("Grid", editorState.showGrid) { editorState.showGrid = it }
-                            ToggleChip("BG", editorState.showCoverage) { editorState.showCoverage = it }
-                            ToggleChip("Enemies", editorState.showEnemies) { editorState.showEnemies = it }
-                            ToggleChip("Doors", editorState.showDoors) { editorState.showDoors = it }
+                            if (editorState.viewMode == EditorViewMode.ROOM) {
+                                ToggleChip("Grid", editorState.showGrid) { editorState.showGrid = it }
+                                ToggleChip("BG", editorState.showCoverage) { editorState.showCoverage = it }
+                                ToggleChip("Enemies", editorState.showEnemies) { editorState.showEnemies = it }
+                                ToggleChip("Doors", editorState.showDoors) { editorState.showDoors = it }
+                            } else {
+                                Text(
+                                    "Whole map view (read-only)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = T.textSecondary.copy(alpha = 0.7f)
+                                )
+                            }
 
                             val macroIdx = editorState.selectedMacroIndex
-                            if (macroIdx >= 0) {
+                            if (macroIdx >= 0 && editorState.viewMode == EditorViewMode.ROOM) {
                                 Text(
                                     "Macro #${"$%02X".format(macroIdx)}",
                                     style = MaterialTheme.typography.bodySmall,
@@ -419,5 +447,25 @@ private fun showExportRomDialog(window: java.awt.Window?, editorState: EditorSta
             target = File(dir, "$file.nes")
         }
         editorState.exportRom(target)
+    }
+}
+
+private fun showExportMapImageDialog(window: java.awt.Window?, editorState: EditorState) {
+    val dialog = java.awt.FileDialog(window as? java.awt.Frame, "Export Full Map Image", java.awt.FileDialog.SAVE)
+    val defaultName = if (editorState.romFileName.isNotEmpty()) {
+        editorState.romFileName.removeSuffix(".nes").removeSuffix(".NES") + "_full_map.png"
+    } else {
+        "metroid_full_map.png"
+    }
+    dialog.file = defaultName
+    dialog.isVisible = true
+    val dir = dialog.directory
+    val file = dialog.file
+    if (dir != null && file != null) {
+        var target = File(dir, file)
+        if (!target.name.endsWith(".png", ignoreCase = true)) {
+            target = File(dir, "$file.png")
+        }
+        editorState.exportFullMapImage(target)
     }
 }

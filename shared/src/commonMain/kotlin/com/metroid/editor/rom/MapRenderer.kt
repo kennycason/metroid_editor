@@ -279,6 +279,100 @@ class MapRenderer(
     }
 
     /**
+     * Render the full game world as one room-accurate image.
+     *
+     * The ROM stores only room numbers in the shared 32x32 world map. Area ownership comes
+     * from MAP_AREA_INDEX, which is required because room numbers are per-area.
+     */
+    fun renderFullWorldMap(
+        editedRooms: Map<String, RoomEdits> = emptyMap(),
+        backgroundColor: Int = 0xFF050505.toInt()
+    ): FullWorldMapRenderResult? {
+        val cells = romData.readWorldMap()
+        val renderableCells = cells.filter { cell ->
+            !cell.isEmpty && MetroidRomData.areaAt(cell.x, cell.y) != null
+        }
+        if (renderableCells.isEmpty()) return null
+
+        val bounds = MetroidRomData.MapBounds(
+            minX = renderableCells.minOf { it.x },
+            maxX = renderableCells.maxOf { it.x },
+            minY = renderableCells.minOf { it.y },
+            maxY = renderableCells.maxOf { it.y }
+        )
+
+        val width = bounds.width * ROOM_WIDTH_PX
+        val height = bounds.height * ROOM_HEIGHT_PX
+        val pixels = IntArray(width * height) { backgroundColor }
+
+        val roomCache = mutableMapOf<String, RoomRenderResult?>()
+        var placedRooms = 0
+        var skippedRooms = 0
+
+        for (cell in renderableCells) {
+            val area = MetroidRomData.areaAt(cell.x, cell.y) ?: continue
+            val key = roomKey(area, cell.roomNumber)
+            val rendered = roomCache.getOrPut(key) {
+                val room = romData.readRoom(area, cell.roomNumber) ?: return@getOrPut null
+                val edits = editedRooms[key]
+                if (edits != null && edits.macroEdits.isNotEmpty()) {
+                    val grid = buildMacroGrid(room)
+                    for (edit in edits.macroEdits) {
+                        grid.set(edit.x, edit.y, edit.macroIndex)
+                        grid.setAttr(edit.x, edit.y, edit.palette)
+                    }
+                    renderFromGrid(room, grid)
+                } else {
+                    renderRoom(room)
+                }
+            }
+
+            if (rendered == null) {
+                skippedRooms++
+                continue
+            }
+
+            val destX = (cell.x - bounds.minX) * ROOM_WIDTH_PX
+            val destY = (cell.y - bounds.minY) * ROOM_HEIGHT_PX
+            blitPixels(rendered.pixels, rendered.width, rendered.height, pixels, width, height, destX, destY)
+            placedRooms++
+        }
+
+        return FullWorldMapRenderResult(
+            pixels = pixels,
+            width = width,
+            height = height,
+            bounds = bounds,
+            placedRooms = placedRooms,
+            skippedRooms = skippedRooms
+        )
+    }
+
+    private fun blitPixels(
+        src: IntArray,
+        srcWidth: Int,
+        srcHeight: Int,
+        dest: IntArray,
+        destWidth: Int,
+        destHeight: Int,
+        destX: Int,
+        destY: Int
+    ) {
+        for (row in 0 until srcHeight) {
+            val y = destY + row
+            if (y !in 0 until destHeight) continue
+            val srcOffset = row * srcWidth
+            val destOffset = y * destWidth + destX
+            for (col in 0 until srcWidth) {
+                val x = destX + col
+                if (x in 0 until destWidth) {
+                    dest[destOffset + col] = src[srcOffset + col]
+                }
+            }
+        }
+    }
+
+    /**
      * Render the world map overview for an area.
      * Each cell is ROOM_WIDTH_PX × ROOM_HEIGHT_PX, but we render a scaled-down version.
      */
@@ -318,5 +412,14 @@ class MapRenderer(
         val width: Int,
         val height: Int,
         val bounds: MetroidRomData.MapBounds
+    )
+
+    data class FullWorldMapRenderResult(
+        val pixels: IntArray,
+        val width: Int,
+        val height: Int,
+        val bounds: MetroidRomData.MapBounds,
+        val placedRooms: Int,
+        val skippedRooms: Int
     )
 }

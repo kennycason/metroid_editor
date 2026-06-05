@@ -8,7 +8,9 @@ import com.metroid.editor.data.RomPreferences
 import com.metroid.editor.rom.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.Json
+import java.awt.image.BufferedImage
 import java.io.File
+import javax.imageio.ImageIO
 
 private val logger = KotlinLogging.logger {}
 
@@ -16,6 +18,11 @@ enum class EditorTool(val label: String, val icon: String) {
     PAINT("Paint", "P"),
     ERASE("Erase", "E"),
     SAMPLE("Sample", "S")
+}
+
+enum class EditorViewMode {
+    ROOM,
+    WORLD_MAP
 }
 
 class EditorState {
@@ -38,6 +45,12 @@ class EditorState {
     var currentMapPos by mutableStateOf<Pair<Int, Int>?>(null)
     var rooms by mutableStateOf<List<Room>>(emptyList()); private set
     var statusMessage by mutableStateOf("No ROM loaded")
+    var viewMode by mutableStateOf(EditorViewMode.ROOM)
+
+    data class FullMapRenderRequest(
+        val renderer: MapRenderer,
+        val editedRooms: Map<String, RoomEdits>
+    )
 
     // Tool
     var activeTool by mutableStateOf(EditorTool.PAINT)
@@ -86,6 +99,9 @@ class EditorState {
     fun zoomIn() { requestedZoom = (if (requestedZoom <= 0) 2f else requestedZoom) * 1.25f; zoomVersion++ }
     fun zoomOut() { requestedZoom = (if (requestedZoom <= 0) 2f else requestedZoom) / 1.25f; zoomVersion++ }
     fun zoomFit() { requestedZoom = 0f; zoomVersion++ }
+    fun toggleViewMode() {
+        viewMode = if (viewMode == EditorViewMode.ROOM) EditorViewMode.WORLD_MAP else EditorViewMode.ROOM
+    }
 
     private val json = Json {
         prettyPrint = true
@@ -130,6 +146,7 @@ class EditorState {
             originalGrid = null
             coverageMap = null
             selectedRoom = null
+            viewMode = EditorViewMode.ROOM
             undoStack.clear()
             redoStack.clear()
             undoVersion++
@@ -626,6 +643,44 @@ class EditorState {
         } catch (e: Exception) {
             logger.error(e) { "exportRom failed" }
             statusMessage = "Error exporting ROM: ${e.message}"
+        }
+    }
+
+    fun createFullMapRenderRequest(): FullMapRenderRequest? {
+        val renderer = mapRenderer ?: return null
+        saveCurrentRoomEdits()
+        val editsSnapshot = project.rooms.mapValues { (_, edits) ->
+            RoomEdits(
+                macroEdits = edits.macroEdits.toMutableList(),
+                enemyChanges = edits.enemyChanges.toMutableList(),
+                doorChanges = edits.doorChanges.toMutableList()
+            )
+        }
+        return FullMapRenderRequest(renderer, editsSnapshot)
+    }
+
+    fun exportFullMapImage(outputFile: File) {
+        try {
+            val request = createFullMapRenderRequest()
+            if (request == null) {
+                statusMessage = "No ROM loaded"
+                return
+            }
+
+            val result = request.renderer.renderFullWorldMap(request.editedRooms)
+            if (result == null) {
+                statusMessage = "Full map render failed: no renderable world map cells"
+                return
+            }
+
+            val image = BufferedImage(result.width, result.height, BufferedImage.TYPE_INT_ARGB)
+            image.setRGB(0, 0, result.width, result.height, result.pixels, 0, result.width)
+            ImageIO.write(image, "png", outputFile)
+
+            statusMessage = "Map exported: ${outputFile.name} (${result.width}x${result.height}, ${result.placedRooms} cells)"
+        } catch (e: Exception) {
+            logger.error(e) { "exportFullMapImage failed" }
+            statusMessage = "Error exporting map image: ${e.message}"
         }
     }
 }

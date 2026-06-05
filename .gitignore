@@ -28,4 +28,4 @@ roms/*.zip
 shared/src/jvmTest/resources/*.nes
 
 # Disassembly reference (large, third-party)
-context/MetroidMMC3/
+reference/MetroidMMC3/

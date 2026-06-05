@@ -1,6 +1,6 @@
-# Metroid NES Technical Documentation
+# Metroid NES Reference
 
-Authoritative reference docs for the Metroid NES engine, synthesized from all known
+Canonical reference folder for the Metroid NES editor. These docs are synthesized from known
 reference codebases: metroid-disassembly, m1disasm, metroid_source_code_expanded,
 MetroidMMC3, Editroid (C#), and METEdit (C++).
 
@@ -14,10 +14,21 @@ MetroidMMC3, Editroid (C#), and METEdit (C++).
 
 ### Editor-Specific
 - [CONNECT_ROOMS_BUG_ANALYSIS.md](CONNECT_ROOMS_BUG_ANALYSIS.md) — Root cause analysis of
-  the broken room connections + fix plan (area ownership map via flood-fill)
+  the broken room connections + final area ownership map fix
+- [EXPORT_BUG_INVESTIGATION.md](EXPORT_BUG_INVESTIGATION.md) — History of export corruption
+  issues and the fixes/constraints found while debugging
+- [tile_memory_strategy_ideas.md](tile_memory_strategy_ideas.md) — Strategy notes for
+  re-encoding, ROM expansion, and tile budget tradeoffs
 
-### Context (legacy, see docs/ for updated versions)
-- `../context/METROID_MAP_FORMAT.md` — Original map format notes (superseded by ROM_LAYOUT.md)
+### Historical Context
+- [CONTEXT.md](CONTEXT.md) — External local reference locations and useful links
+- [METROID_MAP_FORMAT.md](METROID_MAP_FORMAT.md) — Original map format notes, mostly
+  superseded by [ROM_LAYOUT.md](ROM_LAYOUT.md)
+
+### Image References
+- [m1map.png](m1map.png) — Full-game map reference
+- [m1map_room_ids.png](m1map_room_ids.png) — 32x32 world map room ID reference
+- [m1room_tile_layout.png](m1room_tile_layout.png) — Room tile layout reference
 
 ## Key Facts
 

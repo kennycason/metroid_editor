@@ -6,6 +6,10 @@
   <img src="screenshots/kraids_entrance.png" width="80%" />
 </p>
 
+## Reference
+
+All durable project docs and context live in [reference/README.md](reference/README.md).
+
 
 ## Thanks To
 
