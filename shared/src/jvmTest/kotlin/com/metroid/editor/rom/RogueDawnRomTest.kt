@@ -74,6 +74,31 @@ class RogueDawnRomTest {
     }
 
     @Test
+    fun `Rogue Dawn area ownership follows shipped map layout`() {
+        val parser = loadRogueDawn()
+        val data = RogueDawnRomData(parser)
+        val renderer = RogueDawnMapRenderer(data, NesPatternDecoder(parser))
+        val nonEmpty = data.readWorldMap().filter { !it.isEmpty }
+
+        val resolved = nonEmpty.mapNotNull { cell ->
+            renderer.rogueDawnAreaAt(cell.x, cell.y)?.let { area -> cell to area }
+        }
+
+        assertEquals(738, resolved.size)
+        assertTrue(
+            resolved.all { (cell, area) -> cell.roomNumber in 0 until data.getRoomCount(area) },
+            "Every Rogue Dawn map cell must resolve to an area containing that room id"
+        )
+        assertEquals(Area.KRAID, renderer.rogueDawnAreaAt(7, 11))
+        assertEquals(Area.BRINSTAR, renderer.rogueDawnAreaAt(11, 10))
+        assertEquals(Area.NORFAIR, renderer.rogueDawnAreaAt(16, 15))
+        assertEquals(Area.TOURIAN, renderer.rogueDawnAreaAt(26, 11))
+        assertEquals(Area.RIDLEY, renderer.rogueDawnAreaAt(27, 18))
+        assertEquals(Area.TOURIAN, renderer.rogueDawnAreaAt(24, 5))
+        assertEquals(Area.RIDLEY, renderer.rogueDawnAreaAt(24, 18))
+    }
+
+    @Test
     fun `vanilla area room count calculation is invalid for Rogue Dawn`() {
         val parser = loadRogueDawn()
         val data = MetroidRomData(parser)
@@ -225,5 +250,30 @@ class RogueDawnRomTest {
         assertEquals(MapRenderer.ROOM_WIDTH_PX, rendered.width)
         assertEquals(MapRenderer.ROOM_HEIGHT_PX, rendered.height)
         assertTrue(uniqueColors.size > 4, "Rendered room should contain decoded CHR tile colors")
+    }
+
+    @Test
+    fun `Rogue Dawn full world map renderer composes room tiles`() {
+        val parser = loadRogueDawn()
+        val data = RogueDawnRomData(parser)
+        val renderer = RogueDawnMapRenderer(data, NesPatternDecoder(parser))
+
+        val rendered = renderer.renderFullWorldMap() ?: error("Missing Rogue Dawn full map render")
+        val sampledColors = mutableSetOf<Int>()
+        var nonBackgroundSamples = 0
+        var sampleIndex = 0
+        while (sampleIndex < rendered.pixels.size) {
+            val color = rendered.pixels[sampleIndex]
+            sampledColors.add(color)
+            if (color != 0xFF050505.toInt()) nonBackgroundSamples++
+            sampleIndex += 997
+        }
+
+        assertEquals(rendered.bounds.width * MapRenderer.ROOM_WIDTH_PX, rendered.width)
+        assertEquals(rendered.bounds.height * MapRenderer.ROOM_HEIGHT_PX, rendered.height)
+        assertEquals(738, rendered.placedRooms)
+        assertEquals(0, rendered.skippedRooms)
+        assertTrue(nonBackgroundSamples > 100, "Full map render should contain room pixels")
+        assertTrue(sampledColors.size > 8, "Full map render should include decoded tile colors")
     }
 }

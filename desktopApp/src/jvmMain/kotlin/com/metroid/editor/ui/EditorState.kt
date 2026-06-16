@@ -782,10 +782,24 @@ class EditorState {
 
     fun exportFullMapImage(outputFile: File) {
         try {
-            if (rogueDawnData != null) {
-                statusMessage = "Map export is not supported for Rogue Dawn yet"
+            val rogueRenderer = rogueDawnRenderer
+            if (rogueRenderer != null) {
+                val result = rogueRenderer.renderFullWorldMap()
+                if (result == null) {
+                    statusMessage = "Rogue Dawn map export failed: no renderable world map cells"
+                    return
+                }
+
+                val image = BufferedImage(result.width, result.height, BufferedImage.TYPE_INT_ARGB)
+                image.setRGB(0, 0, result.width, result.height, result.pixels, 0, result.width)
+                ImageIO.write(image, "png", outputFile)
+
+                val skipped = if (result.skippedRooms > 0) ", ${result.skippedRooms} skipped" else ""
+                statusMessage =
+                    "Rogue Dawn map exported: ${outputFile.name} (${result.width}x${result.height}, ${result.placedRooms} cells$skipped)"
                 return
             }
+
             val request = createFullMapRenderRequest()
             if (request == null) {
                 statusMessage = "No ROM loaded"

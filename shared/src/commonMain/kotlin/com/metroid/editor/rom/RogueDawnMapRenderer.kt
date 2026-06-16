@@ -6,6 +6,8 @@ import com.metroid.editor.data.RoomObject
 import com.metroid.editor.data.Structure
 import com.metroid.editor.data.StructureRow
 import com.metroid.editor.data.TileMacro
+import com.metroid.editor.data.WorldMapCell
+import com.metroid.editor.data.roomKey
 
 /**
  * Tile renderer for Rogue Dawn's MMC3 data layout.
@@ -17,6 +19,11 @@ class RogueDawnMapRenderer(
     private val data: RogueDawnRomData,
     private val patternDecoder: NesPatternDecoder
 ) {
+    private data class ResolvedWorldCell(
+        val cell: WorldMapCell,
+        val area: Area
+    )
+
     fun renderRoom(room: Room): MapRenderer.RoomRenderResult {
         val pixels = IntArray(MapRenderer.ROOM_WIDTH_PX * MapRenderer.ROOM_HEIGHT_PX)
         val fullPalette = patternDecoder.readAreaPalette(room.area.bankNumber, 0)
@@ -136,6 +143,81 @@ class RogueDawnMapRenderer(
         return backgroundChr1kBanksForTableIndex(tableIndex)
     }
 
+    fun renderFullWorldMap(backgroundColor: Int = 0xFF050505.toInt()): MapRenderer.FullWorldMapRenderResult? {
+        val renderableCells = resolveWorldMapCells(data.readWorldMap())
+        if (renderableCells.isEmpty()) return null
+
+        val bounds = MetroidRomData.MapBounds(
+            minX = renderableCells.minOf { it.cell.x },
+            maxX = renderableCells.maxOf { it.cell.x },
+            minY = renderableCells.minOf { it.cell.y },
+            maxY = renderableCells.maxOf { it.cell.y }
+        )
+
+        val width = bounds.width * MapRenderer.ROOM_WIDTH_PX
+        val height = bounds.height * MapRenderer.ROOM_HEIGHT_PX
+        val pixels = IntArray(width * height) { backgroundColor }
+
+        val roomCache = mutableMapOf<String, Room?>()
+        var placedRooms = 0
+        var skippedRooms = 0
+
+        for ((cell, area) in renderableCells) {
+            val key = roomKey(area, cell.roomNumber)
+            val room = roomCache.getOrPut(key) {
+                data.readRoom(area, cell.roomNumber)
+            }
+
+            if (room == null) {
+                skippedRooms++
+                continue
+            }
+
+            val rendered = renderRoom(room)
+            val destX = (cell.x - bounds.minX) * MapRenderer.ROOM_WIDTH_PX
+            val destY = (cell.y - bounds.minY) * MapRenderer.ROOM_HEIGHT_PX
+            blitPixels(rendered.pixels, rendered.width, rendered.height, pixels, width, height, destX, destY)
+            placedRooms++
+        }
+
+        return MapRenderer.FullWorldMapRenderResult(
+            pixels = pixels,
+            width = width,
+            height = height,
+            bounds = bounds,
+            placedRooms = placedRooms,
+            skippedRooms = skippedRooms
+        )
+    }
+
+    private fun resolveWorldMapCells(cells: List<WorldMapCell>): List<ResolvedWorldCell> {
+        val roomCounts = Area.entries.associateWith { data.getRoomCount(it) }
+
+        return cells.mapNotNull { cell ->
+            if (cell.isEmpty) return@mapNotNull null
+            val area = rogueDawnAreaAt(cell.x, cell.y) ?: return@mapNotNull null
+            if (cell.roomNumber !in 0 until roomCounts.getValue(area)) return@mapNotNull null
+            ResolvedWorldCell(cell, area)
+        }
+    }
+
+    internal fun rogueDawnAreaAt(x: Int, y: Int): Area? {
+        if (x !in 0 until MetroidRomData.WORLD_MAP_WIDTH ||
+            y !in 0 until MetroidRomData.WORLD_MAP_HEIGHT
+        ) {
+            return null
+        }
+
+        return when (ROGUE_DAWN_MAP_AREA[y][x]) {
+            'B' -> Area.BRINSTAR
+            'N' -> Area.NORFAIR
+            'T' -> Area.TOURIAN
+            'K' -> Area.KRAID
+            'R' -> Area.RIDLEY
+            else -> null
+        }
+    }
+
     private fun placeObject(
         area: Area,
         obj: RoomObject,
@@ -213,6 +295,30 @@ class RogueDawnMapRenderer(
         return found
     }
 
+    private fun blitPixels(
+        src: IntArray,
+        srcWidth: Int,
+        srcHeight: Int,
+        dest: IntArray,
+        destWidth: Int,
+        destHeight: Int,
+        destX: Int,
+        destY: Int
+    ) {
+        for (row in 0 until srcHeight) {
+            val y = destY + row
+            if (y !in 0 until destHeight) continue
+            val srcOffset = row * srcWidth
+            val destOffset = y * destWidth + destX
+            for (col in 0 until srcWidth) {
+                val x = destX + col
+                if (x in 0 until destWidth) {
+                    dest[destOffset + col] = src[srcOffset + col]
+                }
+            }
+        }
+    }
+
     private fun blitTile(dest: IntArray, x: Int, y: Int, tilePixels: IntArray) {
         for (row in 0 until MapRenderer.TILE_SIZE) {
             val destY = y + row
@@ -265,6 +371,48 @@ class RogueDawnMapRenderer(
                 0x12 to 0x0D,
                 0x16 to 0x0D
             )
+        )
+
+        /**
+         * Rogue Dawn keeps Metroid's single 32x32 world-map byte table: each cell
+         * stores a room number only, not an area id. The vanilla METEdit ownership
+         * mask does not apply because Rogue Dawn rearranges the regions. This mask
+         * follows Rogue Dawn's shipped printable map and is validated against the
+         * hack's per-area room tables.
+         */
+        private val ROGUE_DAWN_MAP_AREA = arrayOf(
+            ".KKKKKKKKKKKKKKKK..TTTTTTTTTTTTT",
+            "KKKKKKKKKKKKKKKK...TTTTTTTTTTT.T",
+            "KKKKKKK........K...TTTTTTTTTTT.T",
+            "KKKKKKK.TTTTTTTTTTTTTTT...TTT..T",
+            "KKKKKKKTT..T...T...TTT....TTTT..",
+            ".KKK..TTT..T..TTT..TTTTTTTTTT..T",
+            ".KKKK.KTTTTT....B....TTTTTTTT..T",
+            "....KKKTTT...BBBBBBB.TTTTTTTTT..",
+            ".KKKKKK...B.BBBBBBBBB..TTTTT....",
+            ".KK.KKBBBBBBBBBBBBBBBBBBBBBTTTT.",
+            ".KKKKK.B.BBBBBBBBBBBBBBBB.B...T.",
+            "KKKKKKKKKBBBBBBBB..BBBBBB.TTTTT.",
+            "KKKKKKKKK..BBBBBBBBBBBBBBBT.....",
+            "KKKKKKKKKKKKBBBBBBBBBBBBBB......",
+            "KKKKKKKKK...B...B.........NNN...",
+            "KKKKKKKK.NNNNNNNNNNNNNNNNNN.....",
+            "KKKKKK.K.NNNNNNNNNNNNNNN..NNNN..",
+            "KK.KKKKK.NNNNNNNNN.....N...NRRR.",
+            "KK.K.KKKNNNNNNNNNNNNNNNNRRRRRR..",
+            "KKKKKK.KK.N...NNNNNNNNNNNRRRRRRR",
+            "K......KKNNN..NNNNN.NNNNNRRRRRRR",
+            "KKKKKKKKKNNNNNNNNNNNNN.N.RRRRRRR",
+            "K....K.KKNNNNNNNNNNNNNNNRRRRRRRR",
+            "KKKKKKKKKNNN....NN......RRRRRRRR",
+            "K.KKKKKKKNNNNNNNNNRRRRRRRRRRRRRR",
+            "KKKKKKKKKNNNNNNNNNRRRR.R..R..RRR",
+            ".KKKKK.KKNNNNNNNNN...RRRRRR..R.R",
+            ".K.KKKKKK...NNNNNN...R.RRRRRRR.R",
+            ".K......KKK.NNNNNN..RRRRRRRRRR.R",
+            ".KKKKKKKKK..NNNNNNN.......RRRR.R",
+            ".........KK.......N.RK.......R.R",
+            "..K.......K.......N..........R.."
         )
     }
 }

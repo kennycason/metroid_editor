@@ -167,6 +167,9 @@ fun MetroidEditorApp(
                                 color = T.actionPrimary
                             )
                         }
+                        TextButton(onClick = { showExportMapImageDialog(parentWindow, editorState) }) {
+                            Text("Export Map", fontSize = 12.sp, color = T.exportGreen)
+                        }
                     }
 
                     if (editorState.isEditableRom) {
@@ -200,9 +203,6 @@ fun MetroidEditorApp(
                         }
                         TextButton(onClick = { showExportRomDialog(parentWindow, editorState) }) {
                             Text("Export ROM", fontSize = 12.sp, color = T.exportGreen)
-                        }
-                        TextButton(onClick = { showExportMapImageDialog(parentWindow, editorState) }) {
-                            Text("Export Map", fontSize = 12.sp, color = T.exportGreen)
                         }
                     }
                 },
