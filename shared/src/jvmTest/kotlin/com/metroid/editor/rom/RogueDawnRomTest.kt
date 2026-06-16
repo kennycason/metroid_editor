@@ -166,4 +166,35 @@ class RogueDawnRomTest {
             assertTrue(rooms.any { it.objects.isNotEmpty() }, area.displayName)
         }
     }
+
+    @Test
+    fun `Rogue Dawn structures and macros expand room objects`() {
+        val parser = loadRogueDawn()
+        val data = RogueDawnRomData(parser)
+        val renderer = RogueDawnMapRenderer(data, NesPatternDecoder(parser))
+        val room = data.readRoom(Area.BRINSTAR, 0) ?: error("Missing Brinstar room 0")
+
+        val firstStructure = renderer.readStructure(Area.BRINSTAR, room.objects.first().structIndex)
+            ?: error("Missing first room structure")
+        val grid = renderer.buildMacroGrid(room)
+
+        assertTrue(firstStructure.rows.isNotEmpty())
+        assertTrue(grid.macros.any { it >= 0 }, "Room should expand into placed macros")
+        assertEquals(0x10, RogueDawnMapRenderer.AREA_DATA_BANKS.getValue(Area.BRINSTAR))
+    }
+
+    @Test
+    fun `Rogue Dawn tile renderer produces nonblank room pixels`() {
+        val parser = loadRogueDawn()
+        val data = RogueDawnRomData(parser)
+        val renderer = RogueDawnMapRenderer(data, NesPatternDecoder(parser))
+        val room = data.readRoom(Area.BRINSTAR, 0) ?: error("Missing Brinstar room 0")
+
+        val rendered = renderer.renderRoom(room)
+        val uniqueColors = rendered.pixels.toSet()
+
+        assertEquals(MapRenderer.ROOM_WIDTH_PX, rendered.width)
+        assertEquals(MapRenderer.ROOM_HEIGHT_PX, rendered.height)
+        assertTrue(uniqueColors.size > 4, "Rendered room should contain decoded CHR tile colors")
+    }
 }

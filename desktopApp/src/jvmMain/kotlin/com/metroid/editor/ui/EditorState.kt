@@ -30,6 +30,7 @@ class EditorState {
     var romParser by mutableStateOf<NesRomParser?>(null); private set
     var metroidData by mutableStateOf<MetroidRomData?>(null); private set
     var rogueDawnData by mutableStateOf<RogueDawnRomData?>(null); private set
+    var rogueDawnRenderer by mutableStateOf<RogueDawnMapRenderer?>(null); private set
     var patternDecoder by mutableStateOf<NesPatternDecoder?>(null); private set
     var mapRenderer by mutableStateOf<MapRenderer?>(null); private set
     var romFile by mutableStateOf<File?>(null); private set
@@ -158,6 +159,7 @@ class EditorState {
             romParser = parser
             metroidData = null
             rogueDawnData = null
+            rogueDawnRenderer = null
             patternDecoder = null
             mapRenderer = null
             romFile = file
@@ -170,7 +172,11 @@ class EditorState {
 
             val headerNote = if (wasHeaderless) " (headerless, iNES header added)" else ""
             if (isRogueDawn) {
-                rogueDawnData = RogueDawnRomData(parser)
+                val rd = RogueDawnRomData(parser)
+                val pd = NesPatternDecoder(parser)
+                rogueDawnData = rd
+                rogueDawnRenderer = RogueDawnMapRenderer(rd, pd)
+                patternDecoder = pd
                 statusMessage = "Loaded: ${file.name}$headerNote | Rogue Dawn read-only | ${parser.header.prgBanks}×16KB PRG, Mapper ${parser.mapper}"
                 logger.info {
                     "loadRom accepted Rogue Dawn read-only: ${file.name} size=${data.size} headerless=$wasHeaderless " +
@@ -222,6 +228,7 @@ class EditorState {
         romParser = null
         metroidData = null
         rogueDawnData = null
+        rogueDawnRenderer = null
         patternDecoder = null
         mapRenderer = null
         romFile = null

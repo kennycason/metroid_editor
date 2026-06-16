@@ -14,7 +14,7 @@ import com.metroid.editor.data.WorldMapCell
  * per-area pointer block at $9598, but room pointers are 3-byte MMC3-style far
  * pointers: [8KB PRG bank, little-endian CPU address].
  */
-class RogueDawnRomData(private val rom: NesRomParser) {
+class RogueDawnRomData(val rom: NesRomParser) {
     private val vanillaData = MetroidRomData(rom)
 
     fun isSupported(): Boolean = isSupported(rom)
@@ -78,7 +78,22 @@ class RogueDawnRomData(private val rom: NesRomParser) {
         require(pointer.isValid(rom.header.prgBanks * 2)) {
             "Invalid Rogue Dawn far pointer ${pointer.displayName}"
         }
-        return prgRomOffset() + pointer.bank * PRG_8K_BANK_SIZE + (pointer.cpuAddress and 0x1FFF)
+        return prg8BankAddressToRomOffset(pointer.bank, pointer.cpuAddress)
+    }
+
+    fun prg8BankAddressToRomOffset(bank: Int, cpuAddress: Int): Int {
+        require(bank in 0 until rom.header.prgBanks * 2 && cpuAddress in 0x8000 until 0xC000) {
+            "Invalid Rogue Dawn PRG8 address ${"%02X:%04X".format(bank, cpuAddress)}"
+        }
+        return prgRomOffset() + bank * PRG_8K_BANK_SIZE + (cpuAddress and 0x1FFF)
+    }
+
+    fun readPrg8BankByte(bank: Int, cpuAddress: Int): Int {
+        return rom.readByte(prg8BankAddressToRomOffset(bank, cpuAddress))
+    }
+
+    fun chrRomOffset(): Int {
+        return prgRomEndOffset()
     }
 
     private fun parseRoomData(area: Area, roomNumber: Int, pointer: RogueDawnFarPointer): Room {
