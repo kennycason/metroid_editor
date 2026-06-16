@@ -29,6 +29,7 @@ class EditorState {
     // ROM state
     var romParser by mutableStateOf<NesRomParser?>(null); private set
     var metroidData by mutableStateOf<MetroidRomData?>(null); private set
+    var rogueDawnData by mutableStateOf<RogueDawnRomData?>(null); private set
     var patternDecoder by mutableStateOf<NesPatternDecoder?>(null); private set
     var mapRenderer by mutableStateOf<MapRenderer?>(null); private set
     var romFile by mutableStateOf<File?>(null); private set
@@ -111,6 +112,8 @@ class EditorState {
     }
 
     val isRomLoaded: Boolean get() = romParser != null
+    val isRogueDawnRom: Boolean get() = rogueDawnData != null
+    val isEditableRom: Boolean get() = metroidData != null && mapRenderer != null && rogueDawnData == null
     val hasProject: Boolean get() = projectFile != null
     val canUndo: Boolean get() = undoStack.isNotEmpty()
     val canRedo: Boolean get() = redoStack.isNotEmpty()
@@ -129,6 +132,7 @@ class EditorState {
         try {
             logger.info { "loadRom: ${file.absolutePath} (${file.length()} bytes)" }
             if (!file.exists() || file.length() == 0L) {
+                logger.warn { "loadRom rejected empty/missing file: ${file.absolutePath} (${file.length()} bytes)" }
                 if (rememberStandaloneRom) clearRememberedStandaloneRom()
                 clearLoadedRom("File is empty or does not exist: ${file.name}")
                 return false
@@ -137,9 +141,13 @@ class EditorState {
             val data = NesRomParser.ensureHeader(rawData)
             val wasHeaderless = data.size > rawData.size
             val parser = NesRomParser(data)
-            if (!parser.isMetroidRom()) {
+            val isVanillaMetroid = parser.isMetroidRom()
+            val isRogueDawn = RogueDawnRomData.isSupported(parser)
+            if (!isVanillaMetroid && !isRogueDawn) {
+                val message = unsupportedRomMessage(file, parser)
+                logger.warn { message }
                 if (rememberStandaloneRom) clearRememberedStandaloneRom()
-                clearLoadedRom(unsupportedRomMessage(file, parser))
+                clearLoadedRom(message)
                 return false
             }
 
@@ -148,11 +156,10 @@ class EditorState {
             resetTransientEditorState()
 
             romParser = parser
-            val md = MetroidRomData(parser)
-            metroidData = md
-            val pd = NesPatternDecoder(parser)
-            patternDecoder = pd
-            mapRenderer = MapRenderer(md, pd)
+            metroidData = null
+            rogueDawnData = null
+            patternDecoder = null
+            mapRenderer = null
             romFile = file
             romFileName = file.name
             projectFile = null  // Clear old project reference so title updates
@@ -162,7 +169,25 @@ class EditorState {
             }
 
             val headerNote = if (wasHeaderless) " (headerless, iNES header added)" else ""
-            statusMessage = "Loaded: ${file.name}$headerNote | ${parser.header.prgBanks}×16KB PRG, Mapper ${parser.mapper}"
+            if (isRogueDawn) {
+                rogueDawnData = RogueDawnRomData(parser)
+                statusMessage = "Loaded: ${file.name}$headerNote | Rogue Dawn read-only | ${parser.header.prgBanks}×16KB PRG, Mapper ${parser.mapper}"
+                logger.info {
+                    "loadRom accepted Rogue Dawn read-only: ${file.name} size=${data.size} headerless=$wasHeaderless " +
+                        "prgBanks=${parser.header.prgBanks} chrBanks=${parser.header.chrBanks} mapper=${parser.mapper}"
+                }
+            } else {
+                val md = MetroidRomData(parser)
+                metroidData = md
+                val pd = NesPatternDecoder(parser)
+                patternDecoder = pd
+                mapRenderer = MapRenderer(md, pd)
+                statusMessage = "Loaded: ${file.name}$headerNote | ${parser.header.prgBanks}×16KB PRG, Mapper ${parser.mapper}"
+                logger.info {
+                    "loadRom accepted: ${file.name} size=${data.size} headerless=$wasHeaderless " +
+                        "prgBanks=${parser.header.prgBanks} chrBanks=${parser.header.chrBanks} mapper=${parser.mapper}"
+                }
+            }
 
             project = MetEditProject(romPath = file.absolutePath)
             dirty = false
@@ -170,9 +195,9 @@ class EditorState {
             switchArea(selectedArea)
             return true
         } catch (e: Exception) {
+            logger.error(e) { "loadRom failed: ${file.absolutePath}" }
             if (rememberStandaloneRom) clearRememberedStandaloneRom()
             clearLoadedRom("Error loading ROM: ${e.message}")
-            e.printStackTrace()
             return false
         }
     }
@@ -196,6 +221,7 @@ class EditorState {
         resetTransientEditorState()
         romParser = null
         metroidData = null
+        rogueDawnData = null
         patternDecoder = null
         mapRenderer = null
         romFile = null
@@ -235,6 +261,15 @@ class EditorState {
             selectRoom(rooms.firstOrNull())
             recalcBudget()
         }
+        rogueDawnData?.let { data ->
+            rooms = data.readAllRooms(area)
+            tilePaletteImage = null
+            tilePaletteWidth = 0
+            tilePaletteHeight = 0
+            selectedMacroIndex = -1
+            selectRoom(rooms.firstOrNull())
+            spaceBudget = null
+        }
     }
 
     fun selectRoom(room: Room?) {
@@ -245,6 +280,14 @@ class EditorState {
         redoStack.clear()
         undoVersion++
         if (room != null) {
+            if (rogueDawnData != null) {
+                originalGrid = null
+                workingGrid = null
+                coverageMap = null
+                spaceBudget = null
+                editVersion++
+                return
+            }
             val md = metroidData ?: return
             val renderer = mapRenderer ?: return
             val grid = renderer.buildMacroGrid(room)
@@ -437,6 +480,12 @@ class EditorState {
     // -- Tile palette --
 
     fun rebuildTilePalette() {
+        if (rogueDawnData != null) {
+            tilePaletteImage = null
+            tilePaletteWidth = 0
+            tilePaletteHeight = 0
+            return
+        }
         val pd = patternDecoder ?: return
         val md = metroidData ?: return
         val area = selectedArea
@@ -550,6 +599,7 @@ class EditorState {
                 if (romF.exists()) {
                     val romLoaded = loadRom(romF, rememberStandaloneRom = false)  // This resets project to empty
                     if (!romLoaded) {
+                        logger.warn { "loadProject: project ROM failed to load: ${romF.absolutePath}" }
                         project = loaded
                         projectFile = file
                         dirty = false
@@ -566,6 +616,7 @@ class EditorState {
                         if (room != null) selectRoom(room)
                     }
                 } else {
+                    logger.warn { "loadProject: project ROM not found: ${loaded.romPath}" }
                     project = loaded
                     projectFile = file
                     dirty = false
@@ -579,6 +630,7 @@ class EditorState {
             val editCount = loaded.rooms.values.sumOf { it.macroEdits.size }
             statusMessage = "Loaded: ${file.name} ($editCount macro edits across ${loaded.rooms.size} rooms)"
         } catch (e: Exception) {
+            logger.error(e) { "loadProject failed: ${file.absolutePath}" }
             statusMessage = "Error loading project: ${e.message}"
         }
     }
@@ -598,18 +650,20 @@ class EditorState {
         val lastProject = RomPreferences.getLastProjectPath()
         if (lastProject != null) {
             try {
+                logger.info { "autoLoadLastSession: loading last project $lastProject" }
                 loadProject(File(lastProject))
                 return
             } catch (e: Exception) {
-                println("Failed to auto-load project: ${e.message}")
+                logger.error(e) { "autoLoadLastSession: failed to load project $lastProject" }
             }
         }
         val lastRom = RomPreferences.getLastRomPath()
         if (lastRom != null) {
             try {
+                logger.info { "autoLoadLastSession: loading last ROM $lastRom" }
                 loadRom(File(lastRom))
             } catch (e: Exception) {
-                println("Failed to auto-load ROM: ${e.message}")
+                logger.error(e) { "autoLoadLastSession: failed to load ROM $lastRom" }
             }
         }
     }
@@ -617,6 +671,10 @@ class EditorState {
     // -- Space budget --
 
     fun recalcBudget() {
+        if (rogueDawnData != null) {
+            spaceBudget = null
+            return
+        }
         val parser = romParser ?: return
         val md = metroidData ?: return
         val renderer = mapRenderer ?: return
@@ -645,6 +703,11 @@ class EditorState {
     // -- ROM export --
 
     fun exportRom(outputFile: File) {
+        if (rogueDawnData != null) {
+            logger.warn { "exportRom rejected: Rogue Dawn export is not supported yet" }
+            statusMessage = "Export is not supported for Rogue Dawn yet"
+            return
+        }
         val parser = romParser ?: return
         val md = metroidData ?: return
         val renderer = mapRenderer ?: return
@@ -712,6 +775,10 @@ class EditorState {
 
     fun exportFullMapImage(outputFile: File) {
         try {
+            if (rogueDawnData != null) {
+                statusMessage = "Map export is not supported for Rogue Dawn yet"
+                return
+            }
             val request = createFullMapRenderRequest()
             if (request == null) {
                 statusMessage = "No ROM loaded"
