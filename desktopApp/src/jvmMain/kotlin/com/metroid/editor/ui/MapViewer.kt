@@ -36,11 +36,12 @@ fun MapViewer(
     modifier: Modifier = Modifier
 ) {
     val T = EditorTheme
-    var scale by remember { mutableStateOf(-1f) }  // -1 = auto-fit on first layout
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    var renderedImage by remember { mutableStateOf<ImageBitmap?>(null) }
-    var renderError by remember { mutableStateOf<String?>(null) }
-    var hoverMacro by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val romVersion = editorState.romLoadVersion
+    var scale by remember(romVersion) { mutableStateOf(-1f) }  // -1 = auto-fit on first layout
+    var offset by remember(romVersion) { mutableStateOf(Offset.Zero) }
+    var renderedImage by remember(romVersion) { mutableStateOf<ImageBitmap?>(null) }
+    var renderError by remember(romVersion) { mutableStateOf<String?>(null) }
+    var hoverMacro by remember(romVersion) { mutableStateOf<Pair<Int, Int>?>(null) }
     val density = androidx.compose.ui.platform.LocalDensity.current.density
 
     val editVer = editorState.editVersion
@@ -48,7 +49,7 @@ fun MapViewer(
     val zoomVer = editorState.zoomVersion
 
     // Reset to auto-fit when room changes
-    LaunchedEffect(room) {
+    LaunchedEffect(romVersion, room) {
         scale = -1f
         offset = Offset.Zero
     }
@@ -64,7 +65,7 @@ fun MapViewer(
         }
     }
 
-    LaunchedEffect(renderer, room, editVer) {
+    LaunchedEffect(romVersion, renderer, room, editVer) {
         try {
             val result = if (grid != null) {
                 renderer.renderFromGrid(room, grid)

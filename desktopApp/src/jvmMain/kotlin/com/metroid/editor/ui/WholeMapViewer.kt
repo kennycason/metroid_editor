@@ -42,20 +42,21 @@ fun WholeMapViewer(
 ) {
     val T = EditorTheme
     val density = androidx.compose.ui.platform.LocalDensity.current.density
+    val romVersion = editorState.romLoadVersion
 
-    var scale by remember { mutableStateOf(-1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    var preview by remember { mutableStateOf<WholeMapPreview?>(null) }
-    var renderError by remember { mutableStateOf<String?>(null) }
-    var isRendering by remember { mutableStateOf(false) }
+    var scale by remember(romVersion) { mutableStateOf(-1f) }
+    var offset by remember(romVersion) { mutableStateOf(Offset.Zero) }
+    var preview by remember(romVersion) { mutableStateOf<WholeMapPreview?>(null) }
+    var renderError by remember(romVersion) { mutableStateOf<String?>(null) }
+    var isRendering by remember(romVersion) { mutableStateOf(false) }
     val editVersion = editorState.editVersion
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(romVersion) {
         scale = -1f
         offset = Offset.Zero
     }
 
-    LaunchedEffect(editorState.mapRenderer, editVersion, editorState.viewMode) {
+    LaunchedEffect(romVersion, editorState.mapRenderer, editVersion, editorState.viewMode) {
         if (editorState.viewMode != EditorViewMode.WORLD_MAP) return@LaunchedEffect
 
         val request = editorState.createFullMapRenderRequest()

@@ -46,6 +46,7 @@ class EditorState {
     var rooms by mutableStateOf<List<Room>>(emptyList()); private set
     var statusMessage by mutableStateOf("No ROM loaded")
     var viewMode by mutableStateOf(EditorViewMode.ROOM)
+    var romLoadVersion by mutableStateOf(0); private set
 
     data class FullMapRenderRequest(
         val renderer: MapRenderer,
@@ -124,11 +125,12 @@ class EditorState {
 
     // -- ROM loading --
 
-    fun loadRom(file: File): Boolean {
+    fun loadRom(file: File, rememberStandaloneRom: Boolean = true): Boolean {
         try {
             logger.info { "loadRom: ${file.absolutePath} (${file.length()} bytes)" }
             if (!file.exists() || file.length() == 0L) {
-                statusMessage = "File is empty or does not exist: ${file.name}"
+                if (rememberStandaloneRom) clearRememberedStandaloneRom()
+                clearLoadedRom("File is empty or does not exist: ${file.name}")
                 return false
             }
             val rawData = file.readBytes()
@@ -136,20 +138,14 @@ class EditorState {
             val wasHeaderless = data.size > rawData.size
             val parser = NesRomParser(data)
             if (!parser.isMetroidRom()) {
-                statusMessage = "Not a valid Metroid NES ROM"
+                if (rememberStandaloneRom) clearRememberedStandaloneRom()
+                clearLoadedRom(unsupportedRomMessage(file, parser))
                 return false
             }
 
             // Clear all editor state BEFORE loading new data —
             // prevents saveCurrentRoomEdits() from leaking old edits into the new project
-            workingGrid = null
-            originalGrid = null
-            coverageMap = null
-            selectedRoom = null
-            viewMode = EditorViewMode.ROOM
-            undoStack.clear()
-            redoStack.clear()
-            undoVersion++
+            resetTransientEditorState()
 
             romParser = parser
             val md = MetroidRomData(parser)
@@ -160,20 +156,68 @@ class EditorState {
             romFile = file
             romFileName = file.name
             projectFile = null  // Clear old project reference so title updates
-            RomPreferences.setLastRomPath(file.absolutePath)
+            if (rememberStandaloneRom) {
+                RomPreferences.setLastRomPath(file.absolutePath)
+                RomPreferences.clearLastProjectPath()
+            }
 
             val headerNote = if (wasHeaderless) " (headerless, iNES header added)" else ""
             statusMessage = "Loaded: ${file.name}$headerNote | ${parser.header.prgBanks}×16KB PRG, Mapper ${parser.mapper}"
 
             project = MetEditProject(romPath = file.absolutePath)
             dirty = false
+            romLoadVersion++
             switchArea(selectedArea)
             return true
         } catch (e: Exception) {
-            statusMessage = "Error loading ROM: ${e.message}"
+            if (rememberStandaloneRom) clearRememberedStandaloneRom()
+            clearLoadedRom("Error loading ROM: ${e.message}")
             e.printStackTrace()
             return false
         }
+    }
+
+    private fun resetTransientEditorState() {
+        workingGrid = null
+        originalGrid = null
+        coverageMap = null
+        spaceBudget = null
+        selectedRoom = null
+        currentMapPos = null
+        rooms = emptyList()
+        viewMode = EditorViewMode.ROOM
+        undoStack.clear()
+        redoStack.clear()
+        undoVersion++
+        editVersion++
+    }
+
+    private fun clearLoadedRom(message: String) {
+        resetTransientEditorState()
+        romParser = null
+        metroidData = null
+        patternDecoder = null
+        mapRenderer = null
+        romFile = null
+        romFileName = ""
+        project = MetEditProject()
+        projectFile = null
+        dirty = false
+        tilePaletteImage = null
+        tilePaletteWidth = 0
+        tilePaletteHeight = 0
+        statusMessage = message
+        romLoadVersion++
+    }
+
+    private fun clearRememberedStandaloneRom() {
+        RomPreferences.clearLastRomPath()
+        RomPreferences.clearLastProjectPath()
+    }
+
+    private fun unsupportedRomMessage(file: File, parser: NesRomParser): String {
+        val header = parser.header
+        return "Unsupported ROM: ${file.name} (${header.prgBanks}×16KB PRG, ${header.chrBanks}×8KB CHR, Mapper ${parser.mapper})"
     }
 
     // -- Navigation --
@@ -504,7 +548,14 @@ class EditorState {
             if (loaded.romPath.isNotEmpty()) {
                 val romF = File(loaded.romPath)
                 if (romF.exists()) {
-                    loadRom(romF)  // This resets project to empty
+                    val romLoaded = loadRom(romF, rememberStandaloneRom = false)  // This resets project to empty
+                    if (!romLoaded) {
+                        project = loaded
+                        projectFile = file
+                        dirty = false
+                        statusMessage = "Project loaded, but ROM is unsupported: ${romF.name}"
+                        return
+                    }
                     // Now restore the loaded project data (edits, settings)
                     project = loaded
                     projectFile = file

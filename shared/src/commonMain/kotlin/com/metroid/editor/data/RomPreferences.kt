@@ -18,6 +18,10 @@ object RomPreferences {
         prefs.put(PREFS_KEY_ROM_PATH, path)
     }
 
+    fun clearLastRomPath() {
+        prefs.remove(PREFS_KEY_ROM_PATH)
+    }
+
     fun getLastProjectPath(): String? {
         val path = prefs.get(PREFS_KEY_PROJECT_PATH, null)
         return if (path != null && File(path).exists()) path else null
@@ -25,5 +29,9 @@ object RomPreferences {
 
     fun setLastProjectPath(path: String) {
         prefs.put(PREFS_KEY_PROJECT_PATH, path)
+    }
+
+    fun clearLastProjectPath() {
+        prefs.remove(PREFS_KEY_PROJECT_PATH)
     }
 }
