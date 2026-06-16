@@ -119,6 +119,13 @@ class RogueDawnMapRenderer(
         )
     }
 
+    fun backgroundChr1kBanks(area: Area): IntArray? {
+        val tableIndex = AREA_BG_CHR_TABLE_INDEX[area] ?: return null
+        return CHR_BANK_TABLE_ADDRS.map { tableAddr ->
+            data.readPrg8BankByte(CHR_BANK_TABLE_PRG8_BANK, tableAddr + tableIndex)
+        }.toIntArray()
+    }
+
     private fun placeObject(
         area: Area,
         obj: RoomObject,
@@ -161,8 +168,11 @@ class RogueDawnMapRenderer(
     }
 
     private fun decodeBgTile(area: Area, tileIndex: Int): IntArray {
-        val chrPage = AREA_BG_CHR_4K_PAGE[area] ?: return IntArray(NesPatternDecoder.PIXELS_PER_TILE)
-        val chrOffset = data.chrRomOffset() + chrPage * CHR_4K_BANK_SIZE + tileIndex * NesPatternDecoder.BYTES_PER_TILE
+        val chr1kBank = backgroundChr1kBanks(area)
+            ?.getOrNull(tileIndex / TILES_PER_1K_BANK)
+            ?: return IntArray(NesPatternDecoder.PIXELS_PER_TILE)
+        val tileInBank = tileIndex and 0x3F
+        val chrOffset = data.chrRomOffset() + chr1kBank * CHR_1K_BANK_SIZE + tileInBank * NesPatternDecoder.BYTES_PER_TILE
         if (chrOffset < data.chrRomOffset() || chrOffset + NesPatternDecoder.BYTES_PER_TILE > data.rom.romData.size) {
             return IntArray(NesPatternDecoder.PIXELS_PER_TILE)
         }
@@ -185,8 +195,11 @@ class RogueDawnMapRenderer(
     companion object {
         private const val MACRO_DEFS_ADDR = 0x8000
         private const val STRUCT_POINTER_TABLE_ADDR = 0x8400
-        private const val CHR_4K_BANK_SIZE = 0x1000
+        private const val CHR_1K_BANK_SIZE = 0x400
+        private const val TILES_PER_1K_BANK = 64
+        private const val CHR_BANK_TABLE_PRG8_BANK = 0x3D
         private const val MAX_STRUCTURE_ROWS = 128
+        private val CHR_BANK_TABLE_ADDRS = intArrayOf(0xB600, 0xB700, 0xB800, 0xB900)
 
         val AREA_DATA_BANKS = mapOf(
             Area.BRINSTAR to 0x10,
@@ -197,15 +210,15 @@ class RogueDawnMapRenderer(
         )
 
         /**
-         * First-pass background CHR pages from Rogue Dawn's fixed-bank CHR group table.
-         * Each value is a 4KB page in CHR ROM.
+         * Index into Rogue Dawn's background CHR bank tables. The game writes these
+         * through MMC3 registers 2-5, which map four 1KB banks at PPU $1000-$1FFF.
          */
-        val AREA_BG_CHR_4K_PAGE = mapOf(
-            Area.BRINSTAR to 1,
-            Area.NORFAIR to 2,
-            Area.TOURIAN to 8,
-            Area.KRAID to 14,
-            Area.RIDLEY to 20
+        val AREA_BG_CHR_TABLE_INDEX = mapOf(
+            Area.BRINSTAR to 0x09,
+            Area.NORFAIR to 0x19,
+            Area.TOURIAN to 0x38,
+            Area.KRAID to 0x2B,
+            Area.RIDLEY to 0x5D
         )
     }
 }

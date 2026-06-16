@@ -1,6 +1,7 @@
 package com.metroid.editor.rom
 
 import com.metroid.editor.data.Area
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -181,6 +182,8 @@ class RogueDawnRomTest {
         assertTrue(firstStructure.rows.isNotEmpty())
         assertTrue(grid.macros.any { it >= 0 }, "Room should expand into placed macros")
         assertEquals(0x10, RogueDawnMapRenderer.AREA_DATA_BANKS.getValue(Area.BRINSTAR))
+        assertEquals(0x09, RogueDawnMapRenderer.AREA_BG_CHR_TABLE_INDEX.getValue(Area.BRINSTAR))
+        assertArrayEquals(intArrayOf(0x1C, 0x1D, 0x12, 0x13), renderer.backgroundChr1kBanks(Area.BRINSTAR))
     }
 
     @Test
