@@ -184,6 +184,32 @@ class RogueDawnRomTest {
         assertEquals(0x10, RogueDawnMapRenderer.AREA_DATA_BANKS.getValue(Area.BRINSTAR))
         assertEquals(0x09, RogueDawnMapRenderer.AREA_BG_CHR_TABLE_INDEX.getValue(Area.BRINSTAR))
         assertArrayEquals(intArrayOf(0x1C, 0x1D, 0x12, 0x13), renderer.backgroundChr1kBanks(Area.BRINSTAR))
+        assertEquals(0x38, RogueDawnMapRenderer.AREA_BG_CHR_TABLE_INDEX.getValue(Area.KRAID))
+        assertArrayEquals(intArrayOf(0x58, 0x59, 0x5A, 0x5B), renderer.backgroundChr1kBanks(Area.KRAID))
+        assertEquals(0x2B, RogueDawnMapRenderer.AREA_BG_CHR_TABLE_INDEX.getValue(Area.TOURIAN))
+        assertArrayEquals(intArrayOf(0x40, 0x41, 0x42, 0x43), renderer.backgroundChr1kBanks(Area.TOURIAN))
+    }
+
+    @Test
+    fun `Rogue Dawn room scripts select alternate background CHR banks`() {
+        val parser = loadRogueDawn()
+        val data = RogueDawnRomData(parser)
+        val renderer = RogueDawnMapRenderer(data, NesPatternDecoder(parser))
+
+        val brinstarRoom10 = data.readRoom(Area.BRINSTAR, 0x10) ?: error("Missing Brinstar room 10")
+        val brinstarRoom12 = data.readRoom(Area.BRINSTAR, 0x12) ?: error("Missing Brinstar room 12")
+        val brinstarRoom13 = data.readRoom(Area.BRINSTAR, 0x13) ?: error("Missing Brinstar room 13")
+        val tourianRoom49 = data.readRoom(Area.TOURIAN, 0x49) ?: error("Missing Tourian room 49")
+        val ridleyRoom55 = data.readRoom(Area.RIDLEY, 0x55) ?: error("Missing Ridley room 55")
+
+        assertEquals(0x0D, renderer.backgroundChrTableIndex(brinstarRoom10))
+        assertArrayEquals(intArrayOf(0x80, 0x81, 0x82, 0x83), renderer.backgroundChr1kBanks(brinstarRoom10))
+        assertEquals(0x0D, renderer.backgroundChrTableIndex(brinstarRoom12))
+        assertEquals(0x09, renderer.backgroundChrTableIndex(brinstarRoom13))
+        assertEquals(0x2F, renderer.backgroundChrTableIndex(tourianRoom49))
+        assertArrayEquals(intArrayOf(0x40, 0xD7, 0xD8, 0x84), renderer.backgroundChr1kBanks(tourianRoom49))
+        assertEquals(0x66, renderer.backgroundChrTableIndex(ridleyRoom55))
+        assertArrayEquals(intArrayOf(0xEC, 0xED, 0xEE, 0xEF), renderer.backgroundChr1kBanks(ridleyRoom55))
     }
 
     @Test

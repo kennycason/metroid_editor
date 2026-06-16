@@ -74,6 +74,22 @@ class RogueDawnRomData(val rom: NesRomParser) {
         }
     }
 
+    fun readRoomTrailer(room: Room): ByteArray {
+        val refs = readRoomRefs(room.area)
+        val ref = refs.getOrNull(room.roomNumber) ?: return ByteArray(0)
+        val start = room.romOffset + room.rawData.size
+        if (start !in prgRomOffset() until prgRomEndOffset()) return ByteArray(0)
+
+        val nextRoomOffset = refs
+            .asSequence()
+            .filter { it.pointer.bank == ref.pointer.bank && it.romOffset > room.romOffset }
+            .map { it.romOffset }
+            .minOrNull() ?: start
+        val end = minOf(nextRoomOffset, start + ROOM_TRAILER_SCAN_LIMIT, prgRomEndOffset())
+
+        return if (end > start) rom.romData.copyOfRange(start, end) else ByteArray(0)
+    }
+
     fun prg8BankAddressToRomOffset(pointer: RogueDawnFarPointer): Int {
         require(pointer.isValid(rom.header.prgBanks * 2)) {
             "Invalid Rogue Dawn far pointer ${pointer.displayName}"
@@ -209,6 +225,7 @@ class RogueDawnRomData(val rom: NesRomParser) {
         const val ROOM_POINTER_SIZE = 3
         const val MAX_ROOM_POINTERS = 256
         private const val ROOM_SCAN_LIMIT = 0x400
+        private const val ROOM_TRAILER_SCAN_LIMIT = 0x400
 
         fun isSupported(rom: NesRomParser): Boolean {
             return rom.header.isValid &&

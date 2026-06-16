@@ -29,6 +29,7 @@ class RogueDawnMapRenderer(
             placeObject(room.area, obj, tileBuffer, attrBuffer)
         }
 
+        val bgChrBanks = backgroundChr1kBanks(room) ?: IntArray(0)
         for (ty in 0 until MapRenderer.NAMETABLE_HEIGHT_TILES) {
             for (tx in 0 until MapRenderer.NAMETABLE_WIDTH_TILES) {
                 val tileIndex = tileBuffer[ty * MapRenderer.NAMETABLE_WIDTH_TILES + tx]
@@ -44,7 +45,7 @@ class RogueDawnMapRenderer(
                     room.palette
                 }
 
-                val tilePixels = decodeBgTile(room.area, tileIndex)
+                val tilePixels = decodeBgTile(bgChrBanks, tileIndex)
                 val subPalette = patternDecoder.getSubPalette(fullPalette, attr and 0x03)
                 val rendered = patternDecoder.renderTile(tilePixels, subPalette)
                 blitTile(pixels, tx * MapRenderer.TILE_SIZE, ty * MapRenderer.TILE_SIZE, rendered)
@@ -119,11 +120,20 @@ class RogueDawnMapRenderer(
         )
     }
 
+    fun backgroundChrTableIndex(room: Room): Int? {
+        return readRoomChrTableIndex(room)
+            ?: ROOM_BG_CHR_TABLE_INDEX_OVERRIDES[room.area]?.get(room.roomNumber)
+            ?: AREA_BG_CHR_TABLE_INDEX[room.area]
+    }
+
+    fun backgroundChr1kBanks(room: Room): IntArray? {
+        val tableIndex = backgroundChrTableIndex(room) ?: return null
+        return backgroundChr1kBanksForTableIndex(tableIndex)
+    }
+
     fun backgroundChr1kBanks(area: Area): IntArray? {
         val tableIndex = AREA_BG_CHR_TABLE_INDEX[area] ?: return null
-        return CHR_BANK_TABLE_ADDRS.map { tableAddr ->
-            data.readPrg8BankByte(CHR_BANK_TABLE_PRG8_BANK, tableAddr + tableIndex)
-        }.toIntArray()
+        return backgroundChr1kBanksForTableIndex(tableIndex)
     }
 
     private fun placeObject(
@@ -167,9 +177,9 @@ class RogueDawnMapRenderer(
         }
     }
 
-    private fun decodeBgTile(area: Area, tileIndex: Int): IntArray {
-        val chr1kBank = backgroundChr1kBanks(area)
-            ?.getOrNull(tileIndex / TILES_PER_1K_BANK)
+    private fun decodeBgTile(bgChrBanks: IntArray, tileIndex: Int): IntArray {
+        val chr1kBank = bgChrBanks
+            .getOrNull(tileIndex / TILES_PER_1K_BANK)
             ?: return IntArray(NesPatternDecoder.PIXELS_PER_TILE)
         val tileInBank = tileIndex and 0x3F
         val chrOffset = data.chrRomOffset() + chr1kBank * CHR_1K_BANK_SIZE + tileInBank * NesPatternDecoder.BYTES_PER_TILE
@@ -177,6 +187,30 @@ class RogueDawnMapRenderer(
             return IntArray(NesPatternDecoder.PIXELS_PER_TILE)
         }
         return patternDecoder.decodeTile(data.rom.romData, chrOffset)
+    }
+
+    private fun backgroundChr1kBanksForTableIndex(tableIndex: Int): IntArray {
+        return CHR_BANK_TABLE_ADDRS.map { tableAddr ->
+            data.readPrg8BankByte(CHR_BANK_TABLE_PRG8_BANK, tableAddr + tableIndex)
+        }.toIntArray()
+    }
+
+    private fun readRoomChrTableIndex(room: Room): Int? {
+        val trailer = data.readRoomTrailer(room)
+        var found: Int? = null
+        var index = 0
+        while (index <= trailer.size - ROOM_CHR_TABLE_SET_PATTERN.size - 2) {
+            if (trailer[index] == LDA_IMMEDIATE_OPCODE &&
+                trailer.copyOfRange(index + 2, index + 2 + ROOM_CHR_TABLE_SET_PATTERN.size)
+                    .contentEquals(ROOM_CHR_TABLE_SET_PATTERN)
+            ) {
+                found = trailer[index + 1].toInt() and 0xFF
+                index += ROOM_CHR_TABLE_SET_PATTERN.size + 2
+            } else {
+                index++
+            }
+        }
+        return found
     }
 
     private fun blitTile(dest: IntArray, x: Int, y: Int, tilePixels: IntArray) {
@@ -199,7 +233,12 @@ class RogueDawnMapRenderer(
         private const val TILES_PER_1K_BANK = 64
         private const val CHR_BANK_TABLE_PRG8_BANK = 0x3D
         private const val MAX_STRUCTURE_ROWS = 128
+        private const val LDA_IMMEDIATE_OPCODE: Byte = 0xA9.toByte()
         private val CHR_BANK_TABLE_ADDRS = intArrayOf(0xB600, 0xB700, 0xB800, 0xB900)
+        private val ROOM_CHR_TABLE_SET_PATTERN = byteArrayOf(
+            0x8D.toByte(), 0x01, 0x78,
+            0x8D.toByte(), 0x03, 0x78
+        )
 
         val AREA_DATA_BANKS = mapOf(
             Area.BRINSTAR to 0x10,
@@ -216,9 +255,16 @@ class RogueDawnMapRenderer(
         val AREA_BG_CHR_TABLE_INDEX = mapOf(
             Area.BRINSTAR to 0x09,
             Area.NORFAIR to 0x19,
-            Area.TOURIAN to 0x38,
-            Area.KRAID to 0x2B,
+            Area.TOURIAN to 0x2B,
+            Area.KRAID to 0x38,
             Area.RIDLEY to 0x5D
+        )
+
+        val ROOM_BG_CHR_TABLE_INDEX_OVERRIDES = mapOf(
+            Area.BRINSTAR to mapOf(
+                0x12 to 0x0D,
+                0x16 to 0x0D
+            )
         )
     }
 }
