@@ -162,12 +162,17 @@ fun MetroidEditorApp(
                     if (editorState.isRomLoaded) {
                         TextButton(onClick = { editorState.toggleViewMode() }) {
                             Text(
-                                if (editorState.viewMode == EditorViewMode.WORLD_MAP) "Room View" else "Whole Map",
+                                if (editorState.viewMode == EditorViewMode.WORLD_MAP) "Room View" else "World Map",
                                 fontSize = 12.sp,
                                 color = T.actionPrimary
                             )
                         }
+                        TextButton(onClick = { showExportMapImageDialog(parentWindow, editorState) }) {
+                            Text("Export Map", fontSize = 12.sp, color = T.exportGreen)
+                        }
+                    }
 
+                    if (editorState.isEditableRom) {
                         TextButton(onClick = { editorState.undo() }, enabled = editorState.canUndo) {
                             Text("Undo", fontSize = 12.sp,
                                 color = if (editorState.canUndo) T.actionPrimary else T.actionDisabled)
@@ -198,9 +203,6 @@ fun MetroidEditorApp(
                         }
                         TextButton(onClick = { showExportRomDialog(parentWindow, editorState) }) {
                             Text("Export ROM", fontSize = 12.sp, color = T.exportGreen)
-                        }
-                        TextButton(onClick = { showExportMapImageDialog(parentWindow, editorState) }) {
-                            Text("Export Map", fontSize = 12.sp, color = T.exportGreen)
                         }
                     }
                 },
@@ -237,17 +239,26 @@ fun MetroidEditorApp(
             Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 // Left panel: room list + tile palette
                 if (editorState.isRomLoaded) {
-                    Column(modifier = Modifier.width(220.dp).fillMaxHeight()) {
+                    if (editorState.isEditableRom) {
+                        Column(modifier = Modifier.width(220.dp).fillMaxHeight()) {
+                            RoomListPanel(
+                                rooms = editorState.rooms,
+                                selectedRoom = editorState.selectedRoom,
+                                onRoomSelected = { editorState.selectRoom(it) },
+                                modifier = Modifier.weight(0.45f).fillMaxWidth()
+                            )
+                            Divider(color = T.divider, thickness = 1.dp)
+                            TilePalettePanel(
+                                editorState = editorState,
+                                modifier = Modifier.weight(0.55f).fillMaxWidth()
+                            )
+                        }
+                    } else {
                         RoomListPanel(
                             rooms = editorState.rooms,
                             selectedRoom = editorState.selectedRoom,
                             onRoomSelected = { editorState.selectRoom(it) },
-                            modifier = Modifier.weight(0.45f).fillMaxWidth()
-                        )
-                        Divider(color = T.divider, thickness = 1.dp)
-                        TilePalettePanel(
-                            editorState = editorState,
-                            modifier = Modifier.weight(0.55f).fillMaxWidth()
+                            modifier = Modifier.width(220.dp).fillMaxHeight()
                         )
                     }
                 }
@@ -260,7 +271,13 @@ fun MetroidEditorApp(
                 ) {
                     val room = editorState.selectedRoom
                     val renderer = editorState.mapRenderer
-                    if (editorState.viewMode == EditorViewMode.WORLD_MAP && renderer != null) {
+                    val rogueDawnData = editorState.rogueDawnData
+                    if (editorState.viewMode == EditorViewMode.WORLD_MAP && rogueDawnData != null) {
+                        RogueDawnWorldMapViewer(
+                            editorState = editorState,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else if (editorState.viewMode == EditorViewMode.WORLD_MAP && renderer != null) {
                         WholeMapViewer(
                             editorState = editorState,
                             modifier = Modifier.fillMaxSize()
@@ -269,6 +286,12 @@ fun MetroidEditorApp(
                         MapViewer(
                             room = room,
                             renderer = renderer,
+                            editorState = editorState,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else if (room != null && rogueDawnData != null) {
+                        RogueDawnRoomPreview(
+                            room = room,
                             editorState = editorState,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -296,6 +319,7 @@ fun MetroidEditorApp(
                 // Right panel: room info
                 val room = editorState.selectedRoom
                 val md = editorState.metroidData
+                val rogueDawnData = editorState.rogueDawnData
                 if (room != null && md != null) {
                     RoomInfoPanel(
                         room = room,
@@ -305,6 +329,12 @@ fun MetroidEditorApp(
                         onNavigateToRoom = { roomNum, mapX, mapY ->
                             editorState.selectRoomByNumber(roomNum, mapX, mapY)
                         },
+                        modifier = Modifier.width(260.dp).fillMaxHeight()
+                    )
+                } else if (room != null && rogueDawnData != null) {
+                    RogueDawnRoomInfoPanel(
+                        room = room,
+                        roomRef = rogueDawnData.readRoomRefs(room.area).getOrNull(room.roomNumber),
                         modifier = Modifier.width(260.dp).fillMaxHeight()
                     )
                 }
@@ -330,7 +360,16 @@ fun MetroidEditorApp(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (editorState.isRomLoaded) {
-                            if (editorState.viewMode == EditorViewMode.ROOM) {
+                            if (editorState.isRogueDawnRom) {
+                                ToggleChip("Grid", editorState.showGrid) { editorState.showGrid = it }
+                                ToggleChip("Enemies", editorState.showEnemies) { editorState.showEnemies = it }
+                                ToggleChip("Doors", editorState.showDoors) { editorState.showDoors = it }
+                                Text(
+                                    "Rogue Dawn read-only",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = T.textSecondary.copy(alpha = 0.7f)
+                                )
+                            } else if (editorState.viewMode == EditorViewMode.ROOM) {
                                 ToggleChip("Grid", editorState.showGrid) { editorState.showGrid = it }
                                 ToggleChip("BG", editorState.showCoverage) { editorState.showCoverage = it }
                                 ToggleChip("Enemies", editorState.showEnemies) { editorState.showEnemies = it }
